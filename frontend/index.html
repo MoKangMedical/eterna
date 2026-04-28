@@ -16,6 +16,10 @@
     <meta name="twitter:title" content="念念 Eterna | 念念不忘，ta一直在">
     <meta name="twitter:description" content="用AI留住你思念的人——语音、面容、性格、记忆">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯</text></svg>">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#efc7a0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <script type="application/ld+json">
     {"@context":"https://schema.org","@type":"SoftwareApplication","name":"念念 Eterna","description":"用AI留住你思念的人——语音、面容、性格、记忆","url":"https://eterna-niannian.cloud","applicationCategory":"LifestyleApplication","offers":[{"@type":"Offer","name":"思念种子","price":"99","priceCurrency":"CNY"},{"@type":"Offer","name":"思念花园","price":"599","priceCurrency":"CNY"}],"author":{"@type":"Organization","name":"MoKangMedical"}}
     </script>
@@ -8728,6 +8732,7 @@
         }
 
         async function submitAuth() {
+            if (typeof Analytics !== 'undefined') Analytics.track('auth', { type: authMode });
             const submitButton = document.getElementById("authSubmitButton");
             const email = document.getElementById("authEmail").value.trim();
             const password = document.getElementById("authPassword").value.trim();
@@ -8801,6 +8806,7 @@
         }
 
         async function startCheckout(planCode, skipAuthCheck = false) {
+            if (typeof Analytics !== 'undefined') Analytics.trackPlanClick(planCode);
             if (!skipAuthCheck && !currentUser) {
                 pendingPlanCode = planCode;
                 openAuthModal("register");
@@ -10475,6 +10481,7 @@
             }
 
             addMessage(message, "user");
+            if (typeof Analytics !== 'undefined') Analytics.trackChat('user');
             input.value = "";
             input.focus();
             clearResponseMedia();
@@ -10839,6 +10846,54 @@
             btn.addEventListener('click', function() {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             });
+        })();
+
+        /* ========== PWA Service Worker Registration ========== */
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        // Analytics - lightweight event tracking (privacy-respecting, no cookies, no third-party)
+        const Analytics = {
+            events: [],
+            track(eventName, data = {}) {
+                const event = {
+                    name: eventName,
+                    data,
+                    timestamp: Date.now(),
+                    page: location.pathname
+                };
+                this.events.push(event);
+                // Send to backend if available
+                try {
+                    if (navigator.sendBeacon) {
+                        navigator.sendBeacon('/api/analytics', JSON.stringify(event));
+                    }
+                } catch (e) { /* silently ignore */ }
+            },
+            trackPageView() { this.track('page_view'); },
+            trackChat(messageType) { this.track('chat_message', { type: messageType }); },
+            trackPricingView() { this.track('pricing_view'); },
+            trackPlanClick(plan) { this.track('plan_click', { plan }); },
+            trackRegister() { this.track('register'); },
+            trackLogin() { this.track('login'); },
+        };
+
+        // Track page view
+        Analytics.trackPageView();
+
+        // Track pricing section view via IntersectionObserver
+        (function() {
+            const pricingObserver = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        Analytics.trackPricingView();
+                        pricingObserver.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.5 });
+            var pricingSection = document.querySelector('.pricing');
+            if (pricingSection) pricingObserver.observe(pricingSection);
         })();
     </script>
 
