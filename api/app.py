@@ -17,6 +17,7 @@ import sqlite3
 import subprocess
 import threading
 import time
+import time as _time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -91,6 +92,34 @@ async def rate_limit_middleware(request: Request, call_next):
         )
     _rate_limits[client_ip].append(now)
     response = await call_next(request)
+    return response
+
+
+import uuid as _uuid
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(_uuid.uuid4())[:8])
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
+@app.middleware("http")
+async def cors_preflight_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "OPTIONS":
+        response.headers["Access-Control-Max-Age"] = "86400"
+    return response
+
+
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    start = time.monotonic()
+    response = await call_next(request)
+    duration_ms = round((time.monotonic() - start) * 1000)
+    logger.info("%s %s -> %d (%dms)", request.method, request.url.path, response.status_code, duration_ms)
     return response
 
 
@@ -255,6 +284,12 @@ PROACTIVE_POLL_SECONDS = max(20, int(runtime_config("PROACTIVE_POLL_SECONDS", "6
 MIMO_VIDEO_MODEL = runtime_config("MIMO_VIDEO_MODEL", "mimo-v2-omni")
 MIMO_VIDEO_MAX_SECONDS = max(6, min(30, int(runtime_config("MIMO_VIDEO_MAX_SECONDS", "18"))))
 FFMPEG_BIN = shutil.which("ffmpeg") or ""
+
+logger.info("念念 Eterna v%s starting", "2.0.0")
+logger.info("  Database: %s", DB_PATH)
+logger.info("  MIMO API: %s", "configured" if MIMO_API_KEY else "not configured")
+logger.info("  Stripe: %s", "configured" if STRIPE_SECRET_KEY else "not configured")
+logger.info("  FFmpeg: %s", "configured" if FFMPEG_BIN else "not configured")
 
 _proactive_worker_started = False
 _proactive_worker_lock = threading.Lock()
@@ -1011,9 +1046,12 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_digital_human_build_runs_loved_one_id ON digital_human_build_runs(loved_one_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_proactive_flows_next_run ON proactive_flows(enabled, next_run_at);
             CREATE INDEX IF NOT EXISTS idx_proactive_events_user_created ON proactive_events(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+            CREATE INDEX IF NOT EXISTS idx_loved_ones_user ON loved_ones(user_id, updated_at DESC);
             """
         )
-
+        # Enable WAL mode for better concurrent access
+        conn.execute("PRAGMA journal_mode=WAL")
         add_column_if_missing(conn, "users", "phone_number", "TEXT")
         add_column_if_missing(conn, "users", "proactive_opt_in", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(conn, "users", "preferred_contact_channel", "TEXT NOT NULL DEFAULT 'app'")
@@ -4430,19 +4468,32 @@ async def health():
     }
 
 
+@app.post("/api/analytics")
+async def receive_analytics(request: Request):
+    """Lightweight, privacy-respecting analytics endpoint.
+    Logs event name only — no cookies, no personal data stored."""
+    try:
+        data = await request.json()
+        logger.info("analytics event: %s", data.get("name", "unknown"))
+    except Exception:
+        pass
+    return {"status": "ok"}
+
+
+
 @app.get("/health/ready")
 async def health_ready():
     """就绪检查 - 验证所有依赖是否可用。"""
     checks = {}
     overall = "healthy"
-
     # Database check
+    t0 = _time.monotonic()
     try:
         with get_db() as conn:
             conn.execute("SELECT 1").fetchone()
-        checks["database"] = {"status": "ok"}
+        checks["database"] = {"status": "ok", "latency_ms": round((_time.monotonic() - t0) * 1000)}
     except Exception as e:
-        checks["database"] = {"status": "error", "detail": str(e)}
+        checks["database"] = {"status": "error", "detail": str(e), "latency_ms": round((_time.monotonic() - t0) * 1000)}
         overall = "unhealthy"
 
     # MIMO API check
