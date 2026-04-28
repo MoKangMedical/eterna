@@ -37,13 +37,13 @@ class ConversationFlow:
         
         # 状态持续时间建议（轮数）
         self.state_durations = {
-            DialogueState.GREETING: 1,
-            DialogueState.SMALL_TALK: 2-3,
-            DialogueState.DEEP_CONVERSATION: 5-10,
-            DialogueState.EMOTIONAL_SUPPORT: 3-5,
-            DialogueState.MEMORY_SHARING: 2-4,
-            DialogueState.PRACTICAL_HELP: 1-2,
-            DialogueState.FAREWELL: 1,
+            DialogueState.GREETING: (1, 1),
+            DialogueState.SMALL_TALK: (2, 3),
+            DialogueState.DEEP_CONVERSATION: (5, 10),
+            DialogueState.EMOTIONAL_SUPPORT: (3, 5),
+            DialogueState.MEMORY_SHARING: (2, 4),
+            DialogueState.PRACTICAL_HELP: (1, 2),
+            DialogueState.FAREWELL: (1, 1),
         }
 
 @dataclass

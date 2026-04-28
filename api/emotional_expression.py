@@ -464,13 +464,13 @@ class EmotionalExpressionSystem:
         else:
             onomatopoeia_type = "自然声"
         
-        available_onomatopoeia = self.onomatopoeia_patterns.get(omatopoeia_type, ["哈哈"])
+        available_onomatopoeia = self.onomatopoeia_patterns.get(onomatopoeia_type, ["哈哈"])
         onomatopoeia = random.choice(available_onomatopoeia)
         
         # 在句子中添加拟声词
         if intensity > 0.7:
             # 高强度：在开头添加
-            text = f"{omatopoeia}，{text}"
+            text = f"{onomatopoeia}，{text}"
         else:
             # 低强度：在合适位置添加
             sentences = re.split(r'([。！？])', text)
@@ -479,7 +479,7 @@ class EmotionalExpressionSystem:
                 if len(first_sentence) > 15:
                     # 在句子中间添加
                     insert_pos = len(first_sentence) * 2 // 3
-                    text = first_sentence[:insert_pos] + f"，{omatopoeia}" + first_sentence[insert_pos:] + "".join(sentences[1:])
+                    text = first_sentence[:insert_pos] + f"，{onomatopoeia}" + first_sentence[insert_pos:] + "".join(sentences[1:])
         
         return text
     

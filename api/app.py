@@ -4,6 +4,7 @@
 """
 import asyncio
 import base64
+import logging
 import hashlib
 import hmac
 import html
@@ -17,18 +18,21 @@ import subprocess
 import threading
 import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
-
 import httpx
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("eterna")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 
 # 导入新增的增强系统
 from api.emotion_analysis import EnhancedEmotionAnalyzer, EmotionAnalysis
@@ -49,13 +53,100 @@ app = FastAPI(
     version="2.0.0",
 )
 
+ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "https://eterna-niannian.cloud,https://mokangmedical.github.io",
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ===== Rate Limiting =====
+_rate_limits: dict = defaultdict(list)
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX_REQUESTS = 60  # per window per IP
+RATE_LIMIT_CHAT_MAX = 10  # chat endpoint per window
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if os.environ.get("ETERNA_DISABLE_RATE_LIMIT"):
+        return await call_next(request)
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    # Clean old entries
+    _rate_limits[client_ip] = [t for t in _rate_limits[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    # Check limit
+    max_reqs = RATE_LIMIT_CHAT_MAX if "/api/chat" in str(request.url) else RATE_LIMIT_MAX_REQUESTS
+    if len(_rate_limits[client_ip]) >= max_reqs:
+        return JSONResponse(
+            status_code=429,
+            content={"error": {"code": "RATE_LIMITED", "message": "Too many requests. Please wait."}},
+        )
+    _rate_limits[client_ip].append(now)
+    response = await call_next(request)
+    return response
+
+
+# ===== 全局异常处理 =====
+from fastapi.responses import JSONResponse
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """统一HTTP错误响应格式。"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.status_code,
+                "message": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """捕获所有未处理的异常，返回统一格式。"""
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "INTERNAL_ERROR",
+                "message": "服务器内部错误，请稍后重试",
+            }
+        },
+    )
+
+
+# ===== 分页辅助 =====
+class PaginationParams:
+    """通用分页参数。"""
+    def __init__(self, offset: int = 0, limit: int = 20):
+        self.offset = max(0, offset)
+        self.limit = min(max(1, limit), 200)
+
+
+def paginated_response(items: list, total: int, offset: int, limit: int) -> dict:
+    """构建统一分页响应。"""
+    return {
+        "data": items,
+        "pagination": {
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "has_more": offset + limit < total,
+        },
+    }
+
 
 # ===== 配置 =====
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -100,33 +191,33 @@ def runtime_config(name: str, default: str = "") -> str:
 
 
 # ===== 初始化增强系统 =====
-print("正在初始化念念增强系统...")
+logger.info("正在初始化念念增强系统...")
 
 # 初始化情感感知系统
 emotion_analyzer = EnhancedEmotionAnalyzer()
-print("✅ 情感感知系统初始化完成")
+logger.info("✅ 情感感知系统初始化完成")
 
 # 初始化记忆系统
 memory_system = EnhancedMemorySystem()
-print("✅ 记忆系统初始化完成")
+logger.info("✅ 记忆系统初始化完成")
 
 # 初始化人格建模系统
 personality_modeling = EnhancedPersonalityModeling()
-print("✅ 人格建模系统初始化完成")
+logger.info("✅ 人格建模系统初始化完成")
 
 # 初始化主动关怀系统
 proactive_care = EnhancedProactiveCareSystem()
-print("✅ 主动关怀系统初始化完成")
+logger.info("✅ 主动关怀系统初始化完成")
 
 # 初始化对话自然度系统
 dialogue_naturalness = NaturalDialogueSystem()
-print("✅ 对话自然度系统初始化完成")
+logger.info("✅ 对话自然度系统初始化完成")
 
 # 初始化情感表达系统
 emotional_expression = EmotionalExpressionSystem()
-print("✅ 情感表达系统初始化完成")
+logger.info("✅ 情感表达系统初始化完成")
 
-print("🎉 所有增强系统初始化完成！")
+logger.info("🎉 所有增强系统初始化完成！")
 
 
 MIMO_API_BASE = runtime_config("MIMO_API_BASE", "https://api.xiaomimimo.com/v1")
@@ -2790,6 +2881,7 @@ async def analyze_media_with_mimo(
         result = await call_mimo_chat_completion(payload)
         return (result["choices"][0]["message"]["content"] or "").strip()
     except Exception:
+        logger.warning("MIMO chat completion failed", exc_info=True)
         return None
 
 
@@ -3014,6 +3106,7 @@ async def synthesize_speech_with_mimo(
             },
         )
     except Exception:
+        logger.warning("MIMO TTS synthesis failed", exc_info=True)
         return None
 
 
@@ -3083,6 +3176,7 @@ async def generate_video_plan_with_mimo(
             plan["preferred_source_kind"] = default_kind
         return plan
     except Exception:
+        logger.warning("Failed to build video generation plan", exc_info=True)
         return fallback
 
 
@@ -3203,6 +3297,7 @@ def compose_memorial_video(
         subprocess.run(command, check=True, capture_output=True)
         return output_path if output_path.exists() else None
     except Exception:
+        logger.warning("Video processing subprocess failed", exc_info=True)
         cleanup_path(str(output_path))
         return None
 
@@ -3927,6 +4022,7 @@ async def generate_proactive_payload(
                 mode=generation_mode,
             )
         except Exception:
+            logger.warning("Proactive message generation failed, using fallback", exc_info=True)
             message_text = build_proactive_fallback(loved_one, reason, memory_context)
     else:
         message_text = build_proactive_fallback(loved_one, reason, memory_context)
@@ -3942,6 +4038,7 @@ async def generate_proactive_payload(
                 emotion="missing",
             )
         except Exception:
+            logger.warning("Proactive audio synthesis failed", exc_info=True)
             audio_result = None
 
     video_result = None
@@ -3961,6 +4058,7 @@ async def generate_proactive_payload(
                 audio_result=audio_result,
             )
         except Exception:
+            logger.warning("Proactive video synthesis failed", exc_info=True)
             video_result = None
         if video_result is None:
             if audio_result:
@@ -4061,6 +4159,7 @@ async def generate_phone_followup_response(
                 mode="voice",
             )
         except Exception:
+            logger.warning("Proactive voice response generation failed", exc_info=True)
             ai_response = build_fallback_response(
                 loved_one=loved_one,
                 user_message=user_message,
@@ -4302,7 +4401,7 @@ def proactive_worker_loop():
             process_due_greetings()
             process_due_proactive_flows()
         except Exception:
-            pass
+            logger.exception("proactive_worker_loop iteration failed")
         time.sleep(PROACTIVE_POLL_SECONDS)
 
 
@@ -4322,20 +4421,59 @@ async def start_background_workers():
 
 @app.get("/health")
 async def health():
-    bridge = build_call_bridge_status()
+    """基础健康检查 - 进程存活。"""
     return {
         "status": "healthy",
         "service": "念念",
         "version": "2.0.0",
         "timestamp": now_iso(),
-        "database": str(DB_PATH),
-        "stripe_configured": bool(STRIPE_SECRET_KEY),
-        "mimo_configured": bool(MIMO_API_KEY),
-        "mimo_video_model": MIMO_VIDEO_MODEL,
-        "ffmpeg_configured": bool(FFMPEG_BIN),
-        "mimo_video_pipeline_ready": bool(MIMO_API_KEY and FFMPEG_BIN),
-        "call_bridge_provider": bridge["provider"],
-        "call_bridge_configured": bridge["configured"],
+    }
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """就绪检查 - 验证所有依赖是否可用。"""
+    checks = {}
+    overall = "healthy"
+
+    # Database check
+    try:
+        with get_db() as conn:
+            conn.execute("SELECT 1").fetchone()
+        checks["database"] = {"status": "ok"}
+    except Exception as e:
+        checks["database"] = {"status": "error", "detail": str(e)}
+        overall = "unhealthy"
+
+    # MIMO API check
+    checks["mimo"] = {
+        "status": "configured" if MIMO_API_KEY else "not_configured",
+        "model": MIMO_VIDEO_MODEL,
+    }
+
+    # Stripe check
+    checks["stripe"] = {
+        "status": "configured" if STRIPE_SECRET_KEY else "not_configured",
+    }
+
+    # FFmpeg check
+    checks["ffmpeg"] = {
+        "status": "configured" if FFMPEG_BIN else "not_configured",
+    }
+
+    # Call bridge check
+    bridge = build_call_bridge_status()
+    checks["call_bridge"] = {
+        "status": "configured" if bridge["configured"] else "not_configured",
+        "provider": bridge["provider"],
+    }
+
+    return {
+        "status": overall,
+        "service": "念念",
+        "version": "2.0.0",
+        "timestamp": now_iso(),
+        "checks": checks,
     }
 
 
@@ -5428,6 +5566,28 @@ async def handle_media_upload(
     request: Request,
     current_user: dict,
 ) -> dict:
+    # --- Upload validation ---
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
+    ALLOWED_MIME_TYPES = {
+        # images
+        "image/jpeg", "image/png", "image/gif", "image/webp",
+        # audio
+        "audio/mpeg", "audio/wav", "audio/x-m4a", "audio/mp4", "audio/ogg",
+        # video
+        "video/mp4", "video/webm", "video/quicktime",
+        # 3D
+        "model/gltf-binary", "model/gltf+json",
+        "application/octet-stream",  # fallback for .obj and other 3D formats
+    }
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {content_type}")
+    # Read content and check size
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail=f"文件大小超过限制 (最大 50MB)")
+    logger.info("文件上传: kind=%s user=%s filename=%s size=%d", kind, current_user["id"], file.filename, len(content))
+
     with get_db() as conn:
         ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
         subscription = get_subscription_snapshot(conn, current_user["id"])
@@ -5443,7 +5603,7 @@ async def handle_media_upload(
             "model3d": "model3d",
         }
         target_path = safe_upload_path(folder_map.get(kind, f"{kind}s"), loved_one_id, file.filename)
-        content = await file.read()
+        # content already read during upload validation above
         target_path.write_bytes(content)
         summary = await analyze_media_with_mimo(kind, target_path, request=request) if kind in {"voice", "photo", "video"} else None
         if kind == "model3d" and not summary:
@@ -5740,17 +5900,17 @@ async def chat_with_loved_one(
             interaction_mode = "text"
 
         # 使用增强的情感感知系统分析用户消息
-        print(f"正在分析用户情感: {msg.message}")
+        logger.info("正在分析用户情感: %s", msg.message)
         emotion_analysis = emotion_analyzer.analyze_emotion(
             text=msg.message,
             conversation_history=[]  # 可以从数据库加载历史对话
         )
         detected_emotion = emotion_analysis.primary_emotion
         emotion_intensity = emotion_analysis.intensity.value / 5.0  # 转换为0-1范围
-        print(f"情感分析结果: {detected_emotion}, 强度: {emotion_intensity:.2f}")
+        logger.info("情感分析结果: %s, 强度: %.2f", detected_emotion, emotion_intensity)
 
         # 使用增强的记忆系统选择相关记忆
-        print("正在选择相关记忆...")
+        logger.info("正在选择相关记忆...")
         memory_rows = conn.execute(
             "SELECT content, memory_type, memory_date, importance FROM memories WHERE loved_one_id = ? ORDER BY created_at DESC LIMIT 20",
             (msg.loved_one_id,),
@@ -5781,11 +5941,11 @@ async def chat_with_loved_one(
         memory_text = "\\n".join([f"- {value}" for value in memory_values])
         memory_refs = [value[:50] for value in memory_values if value][:3]
         
-        print(f"选择的相关记忆: {len(memory_context.relevant_memories)}条")
-        print(f"情感共鸣度: {memory_context.emotional_resonance:.2f}")
+        logger.info("选择的相关记忆: %d条", len(memory_context.relevant_memories))
+        logger.info("情感共鸣度: %.2f", memory_context.emotional_resonance)
 
         # 使用丰富的人格建模系统构建人格画像
-        print("正在构建人格画像...")
+        logger.info("正在构建人格画像...")
         personality_traits = loved_one.get("personality_traits", {})
         personality_profile = personality_modeling.build_personality_profile(
             name=loved_one["name"],
@@ -5821,9 +5981,9 @@ async def chat_with_loved_one(
                     mode=interaction_mode,
                     intensity=msg.intensity or int(emotion_intensity * 5),  # 使用情感强度
                 )
-                print(f"使用MIMO API生成回应成功")
+                logger.info("使用MIMO API生成回应成功")
             except Exception as e:
-                print(f"MIMO API调用失败，使用回退回应: {e}")
+                logger.warning("MIMO API调用失败，使用回退回应: %s", e)
                 ai_response = build_fallback_response(
                     loved_one=loved_one,
                     user_message=msg.message,
@@ -5832,7 +5992,7 @@ async def chat_with_loved_one(
                     intensity=msg.intensity or int(emotion_intensity * 5),
                 )
         else:
-            print("MIMO API未配置，使用回退回应")
+            logger.info("MIMO API未配置，使用回退回应")
             ai_response = build_fallback_response(
                 loved_one=loved_one,
                 user_message=msg.message,
@@ -5913,7 +6073,7 @@ async def chat_with_loved_one(
         conn.execute("UPDATE loved_ones SET updated_at = ? WHERE id = ?", (now_iso(), msg.loved_one_id))
 
     # 使用对话自然度系统调整回应
-    print("正在调整对话自然度...")
+    logger.info("正在调整对话自然度...")
     dialogue_context = DialogueContext(
         current_state=DialogueState.DEEP_CONVERSATION,  # 可以根据实际情况调整
         state_turns=1,  # 可以从数据库加载
@@ -5933,7 +6093,7 @@ async def chat_with_loved_one(
     )
     
     # 使用情感表达系统增强回应
-    print("正在添加情感表达细节...")
+    logger.info("正在添加情感表达细节...")
     enhanced_response = emotional_expression.add_emotional_expressions(
         text=natural_response,
         emotion=detected_emotion,
@@ -5942,7 +6102,7 @@ async def chat_with_loved_one(
         context={}
     )
     
-    print(f"最终回应: {enhanced_response[:100]}...")
+    logger.info("最终回应: %s...", enhanced_response[:100])
 
     return ChatResponse(
         loved_one_id=msg.loved_one_id,
@@ -5962,11 +6122,16 @@ async def chat_with_loved_one(
 @app.get("/api/chat-history/{loved_one_id}")
 async def get_chat_history(
     loved_one_id: str,
+    offset: int = 0,
     limit: int = 50,
     current_user: dict = Depends(get_current_user),
 ):
     with get_db() as conn:
         ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        total = conn.execute(
+            "SELECT COUNT(*) FROM chat_messages WHERE loved_one_id = ? AND user_id = ?",
+            (loved_one_id, current_user["id"]),
+        ).fetchone()[0]
         rows = conn.execute(
             """
             SELECT created_at, user_message, ai_response, emotion, mode,
@@ -5974,9 +6139,9 @@ async def get_chat_history(
             FROM chat_messages
             WHERE loved_one_id = ? AND user_id = ?
             ORDER BY created_at DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (loved_one_id, current_user["id"], limit),
+            (loved_one_id, current_user["id"], limit, offset),
         ).fetchall()
         items = []
         for row in reversed(rows):
@@ -5995,7 +6160,7 @@ async def get_chat_history(
                     "response_video_kind": video_ref["kind"] if video_ref else None,
                 }
             )
-    return items
+    return paginated_response(items, total, offset, limit)
 
 
 @app.post("/api/memories")
@@ -6030,22 +6195,27 @@ async def add_memory(memory: MemoryEntry, current_user: dict = Depends(get_curre
 @app.get("/api/memories/{loved_one_id}")
 async def get_memories(
     loved_one_id: str,
+    offset: int = 0,
     limit: int = 50,
     current_user: dict = Depends(get_current_user),
 ):
     with get_db() as conn:
         ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        total = conn.execute(
+            "SELECT COUNT(*) FROM memories WHERE loved_one_id = ? AND user_id = ?",
+            (loved_one_id, current_user["id"]),
+        ).fetchone()[0]
         rows = conn.execute(
             """
             SELECT id, loved_one_id, content, memory_type, memory_date, importance, created_at
             FROM memories
             WHERE loved_one_id = ? AND user_id = ?
             ORDER BY created_at DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (loved_one_id, current_user["id"], limit),
+            (loved_one_id, current_user["id"], limit, offset),
         ).fetchall()
-    return [
+    items = [
         {
             "id": row["id"],
             "loved_one_id": row["loved_one_id"],
@@ -6057,6 +6227,7 @@ async def get_memories(
         }
         for row in reversed(rows)
     ]
+    return paginated_response(items, total, offset, limit)
 
 
 @app.delete("/api/memories/{loved_one_id}/{memory_id}")
@@ -6269,6 +6440,6 @@ async def stripe_webhook(request: Request):
 if __name__ == "__main__":
     import uvicorn
 
-    print("念念启动中...")
-    print("念念不忘，ta一直在")
+    logger.info("念念启动中...")
+    logger.info("念念不忘，ta一直在")
     uvicorn.run(app, host="0.0.0.0", port=8102)

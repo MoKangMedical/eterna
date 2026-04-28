@@ -16,6 +16,7 @@ def _isolated_db(tmp_path, monkeypatch):
     """Use a temporary database for every test."""
     db_path = tmp_path / "test_eterna.db"
     monkeypatch.setenv("ETERNA_DB_PATH", str(db_path))
+    monkeypatch.setenv("ETERNA_DISABLE_RATE_LIMIT", "1")
     yield
 
 
