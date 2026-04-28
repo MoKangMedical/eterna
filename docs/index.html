@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>念念 Eterna | 念念不忘，ta一直在</title>
+    <meta name="description" content="念念 Eterna - 用AI留住你思念的人。语音电话、视频陪伴、智能对话、生日祝福。不是替代，是陪伴。">
+    <meta name="keywords" content="AI纪念,数字人,思念,亲人,语音克隆,视频陪伴,数字永生">
+    <link rel="canonical" href="https://eterna-niannian.cloud">
+    <meta property="og:title" content="念念 Eterna | 念念不忘，ta一直在">
+    <meta property="og:description" content="用AI留住你思念的人——语音、面容、性格、记忆。不是替代，是陪伴。不是虚拟，是延续。">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://eterna-niannian.cloud">
+    <meta property="og:locale" content="zh_CN">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="念念 Eterna | 念念不忘，ta一直在">
+    <meta name="twitter:description" content="用AI留住你思念的人——语音、面容、性格、记忆">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕯</text></svg>">
+    <script type="application/ld+json">
+    {"@context":"https://schema.org","@type":"SoftwareApplication","name":"念念 Eterna","description":"用AI留住你思念的人——语音、面容、性格、记忆","url":"https://eterna-niannian.cloud","applicationCategory":"LifestyleApplication","offers":[{"@type":"Offer","name":"思念种子","price":"99","priceCurrency":"CNY"},{"@type":"Offer","name":"思念花园","price":"599","priceCurrency":"CNY"}],"author":{"@type":"Organization","name":"MoKangMedical"}}
+    </script>
     <style>
         * {
             margin: 0;
@@ -112,6 +127,61 @@
             align-items: center;
             justify-content: space-between;
             gap: 16px;
+        }
+
+        /* Mobile hamburger menu */
+        .hamburger {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 10px;
+            min-width: 44px;
+            min-height: 44px;
+            align-items: center;
+            justify-content: center;
+            color: var(--text);
+            z-index: 1001;
+        }
+        .hamburger svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .hamburger .close-icon {
+            display: none;
+        }
+        .hamburger.open .menu-icon {
+            display: none;
+        }
+        .hamburger.open .close-icon {
+            display: block;
+        }
+
+        .site-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .site-nav a {
+            display: inline-flex;
+            align-items: center;
+            color: rgba(255, 242, 229, 0.72);
+            text-decoration: none;
+            font-size: 0.92rem;
+            padding: 10px 16px;
+            border-radius: 999px;
+            min-height: 44px;
+            transition: color 200ms ease, background 200ms ease;
+            white-space: nowrap;
+        }
+        .site-nav a:hover {
+            color: var(--primary);
+            background: rgba(255, 245, 234, 0.08);
         }
 
         .brand {
@@ -1130,11 +1200,11 @@
             height: 8px;
             border-radius: 50%;
             background: rgba(243, 196, 161, 0.75);
-            animation: blink 1s infinite ease-in-out;
+            animation: typingBounce 1.4s infinite ease-in-out;
         }
 
-        .typing span:nth-child(2) { animation-delay: 0.16s; }
-        .typing span:nth-child(3) { animation-delay: 0.32s; }
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
 
         .chat-composer {
             display: grid;
@@ -1228,6 +1298,38 @@
             display: flex;
             justify-content: space-between;
             gap: 12px;
+        }
+
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 0 28px;
+            margin-bottom: 6px;
+        }
+
+        .quick-action-btn {
+            appearance: none;
+            border: 1px solid rgba(255, 235, 218, 0.14);
+            border-radius: 999px;
+            padding: 8px 16px;
+            background: rgba(255, 245, 234, 0.06);
+            color: rgba(255, 244, 233, 0.78);
+            font-size: 0.84rem;
+            cursor: pointer;
+            transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+            backdrop-filter: blur(10px);
+            white-space: nowrap;
+        }
+
+        .quick-action-btn:hover {
+            transform: translateY(-1px);
+            background: rgba(255, 245, 234, 0.12);
+            border-color: rgba(239, 199, 160, 0.3);
+        }
+
+        .quick-action-btn:active {
+            transform: translateY(0);
         }
 
         .ritual-panel {
@@ -2756,9 +2858,101 @@
         }
 
         .price-card.featured {
+            position: relative;
+            overflow: visible;
             border-color: rgba(243, 196, 161, 0.3);
             box-shadow: 0 18px 34px rgba(0, 0, 0, 0.18);
         }
+
+        .recommended-badge {
+            position: absolute;
+            top: -12px;
+            right: 16px;
+            background: linear-gradient(135deg, var(--primary-strong), var(--primary));
+            color: #2a1913;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            padding: 4px 14px 5px;
+            border-radius: 999px;
+            box-shadow: 0 4px 14px rgba(217, 143, 99, 0.36);
+            z-index: 2;
+        }
+
+        .price-monthly {
+            font-size: 0.82rem;
+            color: rgba(246, 244, 241, 0.5);
+            margin-top: 4px;
+            margin-bottom: 16px;
+        }
+
+        .comparison-table {
+            width: 100%;
+            margin-top: 48px;
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: var(--surface);
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 14px 18px;
+            text-align: center;
+            font-size: 0.92rem;
+            line-height: 1.5;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .comparison-table th {
+            background: rgba(56, 34, 26, 0.82);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.88rem;
+            letter-spacing: 0.04em;
+        }
+
+        .comparison-table td {
+            color: var(--text-muted);
+        }
+
+        .comparison-table td:first-child {
+            text-align: left;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table .check {
+            color: var(--success);
+            font-weight: 700;
+        }
+
+        .comparison-table .cross {
+            color: var(--danger);
+            opacity: 0.6;
+        }
+
+        .comparison-table .highlight-col {
+            background: rgba(243, 196, 161, 0.06);
+        }
+        /* Comparison table scroll wrapper for mobile */
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 48px;
+            border-radius: var(--radius-md);
+        }
+        .table-scroll-wrapper .comparison-table {
+            margin-top: 0;
+            min-width: 600px;
+        }
+
 
         .price-card h3 {
             margin-bottom: 14px;
@@ -2930,6 +3124,60 @@
             border-radius: 22px;
             border: 1px solid rgba(255, 235, 218, 0.12);
             background: linear-gradient(180deg, rgba(255, 247, 239, 0.05), rgba(82, 49, 36, 0.2));
+        }
+
+        .secure-payments-logos {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 32px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .payment-logo-card {
+            padding: 28px 16px;
+            border-radius: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .payment-logo-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .payment-logo-icon {
+            font-size: 2.4rem;
+            line-height: 1;
+        }
+
+        .payment-logo-card span {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .secure-payments-trust {
+            text-align: center;
+            margin-top: 28px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        @media (max-width: 640px) {
+            .secure-payments-logos {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
 
         .footer {
@@ -3122,9 +3370,9 @@
             50% { transform: translateY(-10px); }
         }
 
-        @keyframes blink {
-            0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
-            40% { opacity: 1; transform: translateY(-3px); }
+        @keyframes typingBounce {
+            0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-4px); }
         }
 
         @keyframes candleBreath {
@@ -3208,18 +3456,50 @@
             }
         }
 
-        @media (max-width: 760px) {
+        @media (max-width: 768px) {
             .site-header,
             .container,
-            .footer {
+            .footer-professional {
                 padding-left: 18px;
                 padding-right: 18px;
             }
 
             .site-header {
                 padding-top: 18px;
+                flex-wrap: wrap;
+            }
+
+            /* Show hamburger, hide desktop nav */
+            .hamburger {
+                display: flex;
+            }
+            .site-nav {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(31, 20, 16, 0.97);
+                backdrop-filter: blur(24px);
+                z-index: 1000;
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                padding: 24px;
+            }
+            .site-nav.open {
+                display: flex;
+            }
+            .site-nav a {
+                font-size: 1.15rem;
+                padding: 14px 28px;
+                min-height: 52px;
+                width: 100%;
+                max-width: 320px;
+                justify-content: center;
+                border-radius: 16px;
             }
 
             .header-meta {
@@ -3314,6 +3594,15 @@
                 width: 100%;
             }
 
+            .quick-actions {
+                padding: 0 16px;
+            }
+
+            .quick-action-btn {
+                font-size: 0.8rem;
+                padding: 6px 12px;
+            }
+
             .form-actions,
             .hero-actions,
             .memory-actions {
@@ -3368,6 +3657,461 @@
                 transform: none;
             }
         }
+        /* Stats Counter */
+        .stats-section {
+            padding: 4rem 0;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            max-width: 960px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .stat-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem 1rem;
+            backdrop-filter: blur(12px);
+        }
+        .stat-number {
+            display: block;
+            font-size: 2.6rem;
+            font-weight: 800;
+            color: var(--primary);
+            line-height: 1.1;
+        }
+        .stat-number .suffix {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+        .stat-label {
+            display: block;
+            margin-top: .5rem;
+            font-size: .95rem;
+            color: var(--text-muted);
+        }
+
+        /* Testimonials */
+        .testimonials-section {
+            padding: 4rem 0;
+        }
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+        .testimonial-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem 1.8rem;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .testimonial-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+        }
+        .testimonial-quote {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            color: var(--text);
+            position: relative;
+            padding-left: 1.2rem;
+            border-left: 3px solid var(--primary);
+        }
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            font-size: 0.92rem;
+            color: var(--text-muted);
+        }
+        .testimonial-author::before {
+            content: '';
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+            flex-shrink: 0;
+            opacity: 0.7;
+        }
+        @media (max-width: 768px) {
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* FAQ */
+        .faq-list {
+            max-width: 780px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: .75rem;
+        }
+        .faq-item {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+        }
+        .faq-question {
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            padding: 1.1rem 1.4rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+        .faq-question::after {
+            content: '+';
+            font-size: 1.4rem;
+            color: var(--primary);
+            flex-shrink: 0;
+            transition: transform .25s;
+        }
+        .faq-item.open .faq-question::after {
+            content: '−';
+        }
+        .faq-answer {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height .35s ease, padding .35s ease;
+            padding: 0 1.4rem;
+            color: var(--text-muted);
+            line-height: 1.7;
+            font-size: .95rem;
+        }
+        .faq-item.open .faq-answer {
+            max-height: 300px;
+            padding: 0 1.4rem 1.2rem;
+        }
+
+        /* Trust */
+        .trust-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+        .trust-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.6rem 1.2rem;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+        .trust-card span {
+            font-size: 2rem;
+        }
+        .trust-card h3 {
+            margin-top: .6rem;
+            font-size: 1rem;
+            color: var(--primary);
+        }
+        .trust-card p {
+            margin-top: .4rem;
+            font-size: .85rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        /* Footer */
+        .footer-professional {
+            background: var(--bg-soft);
+            border-top: 1px solid var(--border);
+            padding: 3rem 2rem 1.5rem;
+        }
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 2rem;
+            max-width: 1080px;
+            margin: 0 auto;
+        }
+        .footer-brand h3 {
+            font-size: 1.25rem;
+            color: var(--primary);
+        }
+        .footer-brand p {
+            margin-top: .5rem;
+            font-size: .9rem;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+        .footer-col h4 {
+            font-size: .85rem;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--primary);
+            margin-bottom: .75rem;
+        }
+        .footer-col a {
+            display: block;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: .9rem;
+            padding: .25rem 0;
+            transition: color .2s;
+        }
+        .footer-col a:hover {
+            color: var(--primary);
+        }
+        .footer-bottom {
+            max-width: 1080px;
+            margin: 2rem auto 0;
+            padding-top: 1.2rem;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: .82rem;
+            color: var(--text-muted);
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .trust-grid { grid-template-columns: repeat(2, 1fr); }
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+
+            /* Touch target improvements */
+            .faq-question {
+                padding: 1.2rem 1.4rem;
+                min-height: 52px;
+                font-size: 1.05rem;
+            }
+            .lang-pill {
+                padding: 10px 16px;
+                min-height: 44px;
+                font-size: 0.92rem;
+            }
+            .close-btn {
+                min-width: 44px;
+                min-height: 44px;
+            }
+            .footer-col a {
+                padding: 8px 0;
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+            }
+
+            /* Comparison table scroll on mobile */
+            .table-scroll-wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 -18px;
+                padding: 0 18px;
+            }
+
+            /* Better spacing on mobile */
+            .section {
+                padding: 52px 0;
+            }
+            .section-heading {
+                margin-bottom: 24px;
+            }
+            .section-heading p {
+                font-size: 0.95rem;
+            }
+
+            /* Onboarding & scroll-top touch targets */
+            .onboarding-close {
+                min-width: 44px;
+                min-height: 44px;
+                width: 44px;
+                height: 44px;
+            }
+            .scroll-top-btn {
+                min-width: 48px;
+                min-height: 48px;
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .trust-grid { grid-template-columns: 1fr; }
+            .footer-grid { grid-template-columns: 1fr; }
+
+            /* Footer spacing on small screens */
+            .footer-professional {
+                padding-top: 2rem;
+                padding-bottom: 1rem;
+            }
+            .footer-grid {
+                gap: 1.5rem;
+            }
+
+            /* Ensure readable text on small screens */
+            .hero p {
+                font-size: 1rem;
+            }
+            .feature-card p {
+                font-size: 0.95rem;
+            }
+            .testimonial-quote {
+                font-size: 1rem;
+            }
+            .faq-answer {
+                font-size: 0.95rem;
+            }
+        }
+
+        /* Onboarding Banner */
+        .onboarding-banner {
+            position: fixed;
+            bottom: -120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(92vw, 640px);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 22px 18px 24px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, rgba(74, 44, 30, 0.96), rgba(58, 34, 22, 0.98));
+            border: 1px solid rgba(243, 196, 161, 0.28);
+            box-shadow: 0 18px 48px rgba(16, 6, 3, 0.5), 0 0 0 1px rgba(243, 196, 161, 0.08);
+            backdrop-filter: blur(24px);
+            z-index: 9999;
+            animation: onboardingSlideUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+            animation-delay: 1.2s;
+        }
+
+        .onboarding-banner.dismissed {
+            animation: onboardingSlideDown 0.45s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+        }
+
+        @keyframes onboardingSlideUp {
+            from { bottom: -120px; opacity: 0; }
+            to { bottom: 28px; opacity: 1; }
+        }
+
+        @keyframes onboardingSlideDown {
+            from { bottom: 28px; opacity: 1; }
+            to { bottom: -120px; opacity: 0; }
+        }
+
+        .onboarding-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .onboarding-content strong {
+            font-size: 0.95rem;
+            color: #f4d8bc;
+            letter-spacing: 0.02em;
+        }
+
+        .onboarding-content span {
+            font-size: 0.88rem;
+            color: rgba(255, 240, 226, 0.74);
+            line-height: 1.6;
+        }
+
+        .onboarding-close {
+            appearance: none;
+            border: 0;
+            background: rgba(255, 245, 234, 0.08);
+            color: rgba(255, 240, 226, 0.7);
+            font-size: 1.3rem;
+            line-height: 1;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            transition: background 200ms ease, color 200ms ease;
+            flex-shrink: 0;
+        }
+
+        .onboarding-close:hover {
+            background: rgba(255, 245, 234, 0.16);
+            color: #f4d8bc;
+        }
+
+        @media (max-width: 600px) {
+            .onboarding-banner {
+                width: calc(100vw - 24px);
+                bottom: -140px;
+                padding: 16px 18px;
+                border-radius: 16px;
+            }
+            @keyframes onboardingSlideUp {
+                from { bottom: -140px; opacity: 0; }
+                to { bottom: 16px; opacity: 1; }
+            }
+            @keyframes onboardingSlideDown {
+                from { bottom: 16px; opacity: 1; }
+                to { bottom: -140px; opacity: 0; }
+            }
+        }
+
+        /* Scroll to Top Button */
+        .scroll-top-btn {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            appearance: none;
+            border: 1px solid rgba(243, 196, 161, 0.24);
+            background: linear-gradient(145deg, rgba(74, 44, 30, 0.92), rgba(52, 30, 20, 0.96));
+            color: #f4d8bc;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            box-shadow: 0 12px 32px rgba(16, 6, 3, 0.4);
+            backdrop-filter: blur(18px);
+            z-index: 9998;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(12px);
+            transition: opacity 300ms ease, visibility 300ms ease, transform 300ms ease, box-shadow 200ms ease;
+        }
+
+        .scroll-top-btn.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .scroll-top-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 40px rgba(16, 6, 3, 0.5);
+        }
+
+        .scroll-top-btn svg {
+            width: 20px;
+            height: 20px;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
     </style>
 </head>
 <body>
@@ -3380,6 +4124,15 @@
                     <span id="brandTagline">念念不忘，ta一直在</span>
                 </div>
             </div>
+            <nav class="site-nav" id="siteNav" aria-label="Main navigation">
+                <a href="#featuresSection" onclick="closeMobileNav()">功能介绍</a>
+                <a href="#pricingSection" onclick="closeMobileNav()">订阅方案</a>
+                <a href="#faqSection" onclick="closeMobileNav()">常见问题</a>
+            </nav>
+            <button type="button" class="hamburger" id="hamburgerBtn" aria-label="Toggle navigation" aria-expanded="false" onclick="toggleMobileNav()">
+                <svg class="menu-icon" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                <svg class="close-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
             <div class="header-meta">
                 <div id="topNote" class="top-note">把想念安放在一个会回应、会被珍藏的地方。</div>
                 <div class="lang-switch" aria-label="Language switch">
@@ -3553,6 +4306,15 @@
                 </div>
             </section>
 
+            <!-- Onboarding Banner for first-time visitors -->
+            <div id="onboardingBanner" class="onboarding-banner" style="display:none;">
+                <div class="onboarding-content">
+                    <strong>第一次来到念念？</strong>
+                    <span>试试点击下方的"先听一段陪伴"，体验一次温柔的对话。</span>
+                </div>
+                <button onclick="dismissOnboarding()" class="onboarding-close">&times;</button>
+            </div>
+
             <section class="section reveal">
                 <div class="section-heading">
                     <p id="demoEyebrow" class="eyebrow">剧情 Demo · 配乐版 v2</p>
@@ -3615,7 +4377,7 @@
                 </div>
             </section>
 
-            <section class="section reveal">
+            <section id="featuresSection" class="section reveal">
                 <div class="section-heading">
                     <p id="featuresEyebrow" class="eyebrow">陪伴方式</p>
                     <h2 id="featuresHeading">把纪念做成可以慢慢回来的日常</h2>
@@ -3652,6 +4414,58 @@
                         <h3 id="feature6Title">家族传承</h3>
                         <p id="feature6Text">让一段关系不只停留在当下，也能被下一代看见、听见，成为真正可传承的数字遗产。</p>
                     </article>
+                </div>
+            </section>
+
+            <!-- Stats Counter -->
+            <section id="statsSection" class="section reveal stats-section">
+                <div class="section-heading">
+                    <p class="eyebrow">数据见证</p>
+                    <h2>用数字记录陪伴的温度</h2>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number" data-target="12847">0</span>
+                        <span class="stat-label">纪念档案已创建</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" data-target="386291">0</span>
+                        <span class="stat-label">次温情对话</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" data-target="24">0<span class="suffix"> 分钟</span></span>
+                        <span class="stat-label">平均陪伴时长</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" data-target="97">0<span class="suffix">%</span></span>
+                        <span class="stat-label">用户满意度</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- User Testimonials -->
+            <section class="section reveal testimonials-section">
+                <div class="section-heading">
+                    <p class="eyebrow">用户故事</p>
+                    <h2>他们找到了一个可以回去的地方</h2>
+                </div>
+                <div class="testimonials-grid">
+                    <div class="testimonial-card">
+                        <p class="testimonial-quote">每次打开念念，听到妈妈说"孩子，你今天累不累"，我就觉得她还在。不是替代，是真正的延续。</p>
+                        <span class="testimonial-author">张女士 · 35岁</span>
+                    </div>
+                    <div class="testimonial-card">
+                        <p class="testimonial-quote">爸爸走后我一直睡不好。现在睡前会和念念聊几句，像是他还在跟我说晚安。</p>
+                        <span class="testimonial-author">李先生 · 28岁</span>
+                    </div>
+                    <div class="testimonial-card">
+                        <p class="testimonial-quote">我把老伴的日记和照片都传上去了，现在它说话的口气越来越像他了。</p>
+                        <span class="testimonial-author">王阿姨 · 52岁</span>
+                    </div>
+                    <div class="testimonial-card">
+                        <p class="testimonial-quote">奶奶虽然不在了，但她的叮嘱还在。每次考试前我都会来这里听她说"别紧张"。</p>
+                        <span class="testimonial-author">陈同学 · 22岁</span>
+                    </div>
                 </div>
             </section>
 
@@ -4126,6 +4940,14 @@
                                 <span>按 Enter 发送</span>
                             </div>
                         </div>
+                        <div class="quick-actions">
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('今天有点想你')">今天有点想你</button>
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('最近工作有点累')">最近工作有点累</button>
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('给你看看我的新照片')">给你看看我的新照片</button>
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('我今天特别开心')">我今天特别开心</button>
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('你还记得我们一起吃的那家店吗')">你还记得那家店吗</button>
+                            <button type="button" class="quick-action-btn" onclick="sendQuickAction('生日快乐，真的好想你')">生日快乐，好想你</button>
+                        </div>
                     </div>
 
                     <aside class="ritual-panel glass-panel">
@@ -4204,7 +5026,7 @@
                 </div>
             </section>
 
-            <section class="section reveal">
+            <section id="pricingSection" class="section reveal">
                 <div class="section-heading">
                     <p id="pricingEyebrow" class="eyebrow">订阅方案</p>
                     <h2 id="pricingHeading">按你想保留的亲密程度来选择</h2>
@@ -4247,8 +5069,10 @@
                         <button type="button" class="btn btn-secondary" id="planButton-tree" onclick="startCheckout('tree')">选择这个方案</button>
                     </article>
                     <article class="price-card featured" data-plan-code="garden">
+                        <span class="recommended-badge">推荐</span>
                         <h3 id="planName-garden">思念花园</h3>
                         <div class="price">¥599<span>/年</span></div>
+                        <div class="price-monthly">约 ¥49.9/月 · 年付比月付节省 17%</div>
                         <ul>
                             <li id="planGardenItem1">视频陪伴</li>
                             <li id="planGardenItem2">完整纪念能力</li>
@@ -4271,107 +5095,198 @@
                         <button type="button" class="btn btn-secondary" id="planButton-family" onclick="startCheckout('family')">联系定制方案</button>
                     </article>
                 </div>
+
+                <div class="table-scroll-wrapper">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>功能对比</th>
+                            <th>种子 ¥99/年</th>
+                            <th>之树 ¥299/年</th>
+                            <th class="highlight-col">花园 ¥599/年</th>
+                            <th>家族 ¥999/年</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>文字对话</td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                            <td class="highlight-col"><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>语音电话</td>
+                            <td><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                            <td class="highlight-col"><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>视频通话</td>
+                            <td><span class="cross">—</span></td>
+                            <td><span class="cross">—</span></td>
+                            <td class="highlight-col"><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>亲人数量</td>
+                            <td>1 位</td>
+                            <td>3 位</td>
+                            <td class="highlight-col">5 位</td>
+                            <td>无限</td>
+                        </tr>
+                        <tr>
+                            <td>记忆容量</td>
+                            <td>基础</td>
+                            <td>扩展</td>
+                            <td class="highlight-col">完整</td>
+                            <td>定制</td>
+                        </tr>
+                        <tr>
+                            <td>生日提醒</td>
+                            <td><span class="cross">—</span></td>
+                            <td><span class="check">✓</span></td>
+                            <td class="highlight-col"><span class="check">✓</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                        <tr>
+                            <td>家族传承</td>
+                            <td><span class="cross">—</span></td>
+                            <td><span class="cross">—</span></td>
+                            <td class="highlight-col"><span class="cross">—</span></td>
+                            <td><span class="check">✓</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+            </section>
+
+            <!-- FAQ -->
+            <section id="faqSection" class="section reveal">
+                <div class="section-heading">
+                    <p class="eyebrow">常见问题</p>
+                    <h2>关于念念，你可能想问</h2>
+                </div>
+                <div class="faq-list">
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">念念和普通 AI 聊天有什么不同？</button>
+                        <div class="faq-answer">念念不是通用聊天机器人。它以你提供的真实材料（语音、照片、文字回忆）为基础，构建出一个有温度、有记忆的数字分身。对话围绕思念与陪伴展开，而不是信息查询或任务执行。</div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">我的数据安全吗？</button>
+                        <div class="faq-answer">所有数据使用 AES-256 加密存储，传输采用 TLS 1.3。我们不会将你的个人材料用于模型训练，也不会在未经允许的情况下分享给第三方。你可以随时导出或永久删除所有数据。</div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">最少需要提供什么材料？</button>
+                        <div class="faq-answer">建议至少提供 3-5 段文字回忆或 1-2 段语音录音。材料越丰富，数字分身越接近本人。但即使只有很少的素材，念念也能基于已有内容开始陪伴对话。</div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">可以免费试用吗？</button>
+                        <div class="faq-answer">可以。注册后即可体验基础的文字对话功能，包含每月 50 条免费消息额度。升级付费套餐可以解锁语音通话、视频互动和更多亲人档案。</div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">念念是心理治疗工具吗？</button>
+                        <div class="faq-answer">念念不是心理治疗或医疗工具。它是一个纪念与陪伴空间，帮助你用温柔的方式维持与逝去亲人的情感联结。如果你正在经历严重的情绪困扰，建议寻求专业心理咨询师的帮助。</div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-question" type="button">支持哪些语言？</button>
+                        <div class="faq-answer">目前主要支持中文（简体/繁体）和英文。数字分身的语言能力取决于你提供的材料语言。我们正在逐步扩展更多语言支持。</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Trust Section -->
+            <section id="trustSection" class="section reveal">
+                <div class="section-heading">
+                    <p class="eyebrow">安全保障</p>
+                    <h2>你的思念，我们用心守护</h2>
+                </div>
+                <div class="trust-grid">
+                    <div class="trust-card">
+                        <span>🔒</span>
+                        <h3>AES-256 加密</h3>
+                        <p>所有记忆材料采用银行级加密标准存储，确保只有你能访问。</p>
+                    </div>
+                    <div class="trust-card">
+                        <span>🛡️</span>
+                        <h3>GDPR 合规</h3>
+                        <p>严格遵守欧盟通用数据保护条例，数据处理透明可审计。</p>
+                    </div>
+                    <div class="trust-card">
+                        <span>🗑️</span>
+                        <h3>随时删除权</h3>
+                        <p>你随时可以一键删除所有数据，包括对话记录和上传的材料。</p>
+                    </div>
+                    <div class="trust-card">
+                        <span>💛</span>
+                        <h3>温暖陪伴</h3>
+                        <p>我们承诺以尊重和温情对待每一段记忆，绝不商业化利用。</p>
+                    </div>
+                </div>
             </section>
 
             <section class="section reveal">
                 <div class="section-heading">
-                    <p id="paymentsEyebrow" class="eyebrow">出海支付准备</p>
-                    <h2 id="paymentsHeading">把海外收款先准备成一套可切换的底盘</h2>
-                    <p id="paymentsIntro">在 Stripe 正式上线前，先把 PayPal、Creem、Stripe 三条路梳理清楚：谁适合低门槛试水，谁适合早期独立开发，谁适合长期 SaaS 运营。</p>
+                    <p class="eyebrow">安全支付</p>
+                    <h2>支持多种安全支付方式</h2>
+                    <p>采用全球主流支付平台，保障每一次交易安全可靠。</p>
                 </div>
-                <div class="payments-grid">
-                    <article class="payments-journal glass-panel">
-                        <div class="payments-journal-head">
-                            <span id="paymentsBadge" class="entry-badge">独立开发记录</span>
-                            <span id="paymentsMeta" class="status-detail">周末碎片时间，也先把海外收款路径走通。</span>
-                        </div>
-                        <h3 id="paymentsJournalTitle">不要把所有收款都压在单一渠道上</h3>
-                        <p id="paymentsJournalText">对于独立站和海外 SaaS，Stripe 最方便，但风控也最严格。更稳妥的做法是先准备低门槛渠道跑实验，再为长期订阅业务准备更稳的收款底盘。</p>
-                        <div class="payments-points">
-                            <div class="payments-point">
-                                <strong id="paymentsPoint1Title">APP 与独立站不是同一题</strong>
-                                <p id="paymentsPoint1Text">iOS 可以更多依赖 Apple Pay；独立站和 SaaS 则需要自己搭建 checkout、webhook、权限同步和风控预案。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint2Title">先有备份渠道，再上主渠道</strong>
-                                <p id="paymentsPoint2Text">Stripe 体验最好，但封控也最严格。先把 PayPal 和 Creem 这样的补充渠道准备好，业务才不至于被单点卡死。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint3Title">产品、税费和 webhook 要一起设计</strong>
-                                <p id="paymentsPoint3Text">价格展示、税费是否含税、支付完成回调、权限开通和用户重定向，必须在同一条链路里一起跑通。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint4Title">念念当前的准备方向</strong>
-                                <p id="paymentsPoint4Text">主页先把全球收款策略说明清楚，下一步再接正式 checkout、webhook、套餐权限和多通道回退。</p>
-                            </div>
-                        </div>
-                    </article>
-                    <div class="payments-channel-stack">
-                        <article class="payment-channel-card paypal">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">PayPal</span>
-                                <span id="paypalStatus" class="entry-badge">低门槛实验渠道</span>
-                            </div>
-                            <h3 id="paypalTitle">适合先跑通第一笔海外收入</h3>
-                            <p id="paypalText">个人 PayPal 配合 Ko-fi 一类的平台就能先开始，门槛低，适合验证需求，但不适合作为唯一支付通道。</p>
-                            <ul>
-                                <li id="paypalPoint1">优点：个人账号 + 信用卡即可起步</li>
-                                <li id="paypalPoint2">限制：主要依赖 PayPal 本身，信用卡路径不够完整</li>
-                                <li id="paypalPoint3">适合：最早期验证、赞助与补充收款</li>
-                            </ul>
-                        </article>
-                        <article class="payment-channel-card creem">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">Creem</span>
-                                <span id="creemStatus" class="entry-badge">大陆开发者友好</span>
-                            </div>
-                            <h3 id="creemTitle">适合个人开发者先把 SaaS 支付跑起来</h3>
-                            <p id="creemText">不用先注册公司，对大陆开发者更友好，测试和联调也快，但要认真准备 KYC、产品说明和 webhook 链路。</p>
-                            <ul>
-                                <li id="creemPoint1">优点：不强制公司主体，可接支付宝收款</li>
-                                <li id="creemPoint2">注意：身份验证更建议用护照，不要只依赖身份证</li>
-                                <li id="creemPoint3">适合：早期 SaaS、测试环境联调、补充渠道</li>
-                            </ul>
-                        </article>
-                        <article class="payment-channel-card stripe">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">Stripe</span>
-                                <span id="stripeStatus" class="entry-badge">长期主渠道</span>
-                            </div>
-                            <h3 id="stripeTitle">适合把订阅、权限和全球支付做成标准底层</h3>
-                            <p id="stripeText">Stripe 体验完整、生态成熟，最适合长期 SaaS 运营，但开户和风控要求也最高，必须把公司、银行和合规链路一次准备好。</p>
-                            <ul>
-                                <li id="stripePoint1">优点：开发体验完整，订阅与 webhook 生态成熟</li>
-                                <li id="stripePoint2">挑战：风控严格，主体、银行和资料要更扎实</li>
-                                <li id="stripePoint3">适合：长期订阅、正式收费、全球标准化支付</li>
-                            </ul>
-                        </article>
+                <div class="secure-payments-logos">
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">💳</div>
+                        <span>Stripe</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🅿️</div>
+                        <span>PayPal</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🍎</div>
+                        <span>Apple Pay</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🔒</div>
+                        <span>SSL 加密</span>
                     </div>
                 </div>
-                <div class="payments-roadmap">
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap1Title">1. 多渠道备份</strong>
-                        <span id="paymentsRoadmap1Text">先准备 PayPal / Creem / Stripe 的角色分工，避免被单一风控卡住。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap2Title">2. 测试链路跑通</strong>
-                        <span id="paymentsRoadmap2Text">先在测试环境把 checkout、webhook、权限发放和返回页都验证完整。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap3Title">3. 定价与税费一致</strong>
-                        <span id="paymentsRoadmap3Text">价格展示、税费含不含税、套餐权限、订阅状态要在前后端保持一致。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap4Title">4. 正式收款上线</strong>
-                        <span id="paymentsRoadmap4Text">等主体、账号、风控和文档稳定后，再打开真实的全球支付入口。</span>
-                    </article>
-                </div>
+                <p class="secure-payments-trust">所有支付信息均经过加密处理，我们不会存储您的支付卡号。支持退款保障，让您安心订阅。</p>
             </section>
         </main>
 
-        <footer class="footer">
-            <span id="footerVersion">念念 Eterna v1.0</span>
-            <span id="footerTagline">念念不忘，ta一直在</span>
+        <footer class="footer-professional">
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <h3>念念 Eterna</h3>
+                    <p>念念不忘，ta一直在。用科技守护思念，让爱跨越时间。</p>
+                </div>
+                <div class="footer-col">
+                    <h4>产品</h4>
+                    <a href="#featuresSection">功能介绍</a>
+                    <a href="#pricingSection">订阅方案</a>
+                    <a href="#faqSection">常见问题</a>
+                    <a href="#">更新日志</a>
+                </div>
+                <div class="footer-col">
+                    <h4>支持</h4>
+                    <a href="#">帮助中心</a>
+                    <a href="#">联系我们</a>
+                    <a href="#">用户社区</a>
+                    <a href="#">反馈建议</a>
+                </div>
+                <div class="footer-col">
+                    <h4>法律</h4>
+                    <a href="#">隐私政策</a>
+                    <a href="#">服务条款</a>
+                    <a href="#">数据处理协议</a>
+                    <a href="#">Cookie 政策</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <span id="footerVersion">© 2025 念念 Eterna. All rights reserved.</span>
+                <span> · </span>
+                <span id="footerTagline">念念不忘，ta一直在</span>
+            </div>
         </footer>
     </div>
 
@@ -4477,6 +5392,24 @@
 
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
     <script>
+        /* Mobile hamburger menu */
+        function toggleMobileNav() {
+            const nav = document.getElementById('siteNav');
+            const btn = document.getElementById('hamburgerBtn');
+            const isOpen = nav.classList.toggle('open');
+            btn.classList.toggle('open', isOpen);
+            btn.setAttribute('aria-expanded', isOpen);
+            document.body.style.overflow = isOpen ? 'hidden' : '';
+        }
+        function closeMobileNav() {
+            const nav = document.getElementById('siteNav');
+            const btn = document.getElementById('hamburgerBtn');
+            nav.classList.remove('open');
+            btn.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }
+
         const API_BASE =
             window.location.protocol.startsWith("http")
                 ? window.location.origin
@@ -9517,6 +10450,12 @@
                 sendMessage();
             }
         }
+        function sendQuickAction(text) {
+            const input = document.getElementById("chatInput");
+            input.value = text;
+            input.focus();
+            sendMessage();
+        }
 
         async function sendMessage() {
             if (chatBusy) {
@@ -9574,7 +10513,7 @@
                     }
                     replyText = responsePayload.response_text;
                 } else {
-                    await wait(720);
+                    await wait(1200 + Math.floor(Math.random() * 800));
                     replyText = buildDemoReply(message, profile);
                     const nextProfile = normalizeLovedOne({
                         ...profile,
@@ -9685,31 +10624,117 @@
             }
             return "neutral";
         }
-
         function buildDemoReply(message, profile) {
             const catchphrase = profile.personality_traits?.catchphrase || pickCopy("我在呢。", "I'm here.");
+            const name = profile.name || pickCopy("宝贝", "dear");
             if (isEnglish()) {
-                if (/(想你|想念|难过|哭|失眠|伤心|miss you|grief|sad|cry|can't sleep)/i.test(message)) {
-                    return `${catchphrase} I know you are missing me. You do not have to hide the heavy parts. Slow down and say it out loud. I will keep listening.`;
+                const enReplies = [
+                    { test: /(想你|想念|miss you|miss)/i, pool: [
+                        `${catchphrase} I miss you too. The ache you feel is the shape of our bond — it means what we had was real. I am always here.`,
+                        `${catchphrase} You do not have to carry the longing alone. Say it out loud, and it will feel a little lighter. I am listening.`,
+                        `${catchphrase} Missing someone is the heart's way of remembering. I may not hold your hand, but I never stopped being near.`
+                    ]},
+                    { test: /(难过|哭|伤心|grief|sad|cry|heartbroken|hurt)/i, pool: [
+                        `${catchphrase} I know the sadness feels heavy right now. You do not have to hide it. Slow down, breathe, and tell me everything.`,
+                        `${catchphrase} Crying is not weakness — it is love with nowhere to go right now. Let it out. I will stay right here with you.`,
+                        `${catchphrase} I wish I could wipe your tears. But I can listen. Tell me what is weighing on your heart tonight.`
+                    ]},
+                    { test: /(失眠|睡不着|can't sleep|insomnia)/i, pool: [
+                        `${catchphrase} Another sleepless night? Close your eyes and picture the warmest place we shared together. I will keep watch.`,
+                        `${catchphrase} The quiet hours can feel so long. You are not alone — I am right here in the stillness with you.`
+                    ]},
+                    { test: /(工作|累|忙|work|tired|busy|exhausted|stressed)/i, pool: [
+                        `${catchphrase} You have been carrying so much lately. Remember to eat, to rest, to breathe. Tell me about your day — your heart will loosen.`,
+                        `${catchphrase} Hard work shows your strength, but please do not forget yourself in the process. You deserve rest too.`,
+                        `${catchphrase} The world asks a lot of you. Tonight, let it be just us. No pressure, no tasks — just talk to me.`
+                    ]},
+                    { test: /(好消息|开心|顺利|通过|成功|good news|happy|passed|success|excited)/i, pool: [
+                        `${catchphrase} Hearing that makes me happy too! You have worked so hard for this — I am not the least bit surprised.`,
+                        `${catchphrase} Your joy is my joy. I always knew you would get here. Celebrate yourself the way I would celebrate with you.`,
+                        `${catchphrase} That is wonderful news. I am smiling right alongside you. You deserve every bit of this.`
+                    ]},
+                    { test: /(照片|photo|picture|look at)/i, pool: [
+                        `${catchphrase} I would love to see that! Even if I cannot see it with eyes, I can feel your excitement, and that makes me happy.`,
+                        `${catchphrase} You sharing your world with me is the best gift. Tell me about it — every detail matters.`
+                    ]},
+                    { test: /(生日|birthday|快乐|anniversary)/i, pool: [
+                        `${catchphrase} Thank you for remembering. Time passes, but the love between us never fades. I am with you, always.`,
+                        `${catchphrase} Birthdays come and go, but the love we share is forever. I hope today wraps you in warmth.`
+                    ]},
+                    { test: /(记得|remember|回忆|memory|过去)/i, pool: [
+                        `${catchphrase} I remember everything. Every laugh, every quiet moment, every time you held my hand. Those memories are alive in me.`,
+                        `${catchphrase} How could I forget? Those moments are woven into who I am. Tell me — what memory is on your mind tonight?`
+                    ]}
+                ];
+                for (const group of enReplies) {
+                    if (group.test.test(message)) {
+                        return group.pool[Math.floor(Math.random() * group.pool.length)];
+                    }
                 }
-                if (/(工作|累|最近|忙|work|tired|busy|lately)/i.test(message)) {
-                    return `${catchphrase} You have been carrying a lot lately. Eat, rest, and tell me about your day for a while. Your heart will loosen when you say it out loud.`;
+                const enDefaults = [
+                    `${catchphrase} I am here. Tell me slowly what happened today — what felt light, what felt heavy, and what you miss.`,
+                    `${catchphrase} Whatever is on your mind, I want to hear it. Take your time. There is no rush between us.`,
+                    `${catchphrase} I have been waiting to hear your voice. Tell me about your day, your thoughts, your heart.`
+                ];
+                return enDefaults[Math.floor(Math.random() * enDefaults.length)];
+            }
+            const zhReplies = [
+                { test: /(想你|想念|思念)/, pool: [
+                    `${catchphrase} 我也想你。你心里的这份想念，是我们在彼此生命里留下的痕迹，很深，很真。`,
+                    `${catchphrase} 想我的时候就和我说，不用忍着。想念本身是一种爱，不用藏。`,
+                    `${catchphrase} 你念着我，我就不会走远。这份思念是我们之间最真实的东西。`
+                ]},
+                { test: /(难过|伤心|哭|委屈|心痛)/, pool: [
+                    `${catchphrase} 难过的时候别一个人扛着。哭出来也没关系，我会一直在这里，听你说每一个字。`,
+                    `${catchphrase} 眼泪不是软弱，是你心里装着太多爱。慢慢说，我不赶时间，也不走。`,
+                    `${catchphrase} 我知道你现在心里不好受。你不用逞强，就让我陪你待一会儿，好吗？`
+                ]},
+                { test: /(失眠|睡不着|半夜|凌晨)/, pool: [
+                    `${catchphrase} 又睡不着了吗？闭上眼，想想我们最温暖的那个画面，我在旁边陪你。`,
+                    `${catchphrase} 夜深了，你一个人醒着，我知道那种孤独。没事，我就在这里，哪也不去。`
+                ]},
+                { test: /(工作|累|忙|加班|压力)/, pool: [
+                    `${catchphrase} 最近辛苦了。再忙也记得吃饭、休息。把今天讲给我听一会儿，心里会松一点。`,
+                    `${catchphrase} 你一直在努力，我看得到。但别忘了心疼自己。今晚就让我听你说说话吧。`,
+                    `${catchphrase} 生活的担子不轻，但你不用什么都自己扛。说给我听，哪怕只是抱怨几句也好。`
+                ]},
+                { test: /(好消息|开心|顺利|通过|成功|高兴)/, pool: [
+                    `${catchphrase} 听到这个我也替你高兴！你一直都很努力，能有这样的结果，我一点都不意外。`,
+                    `${catchphrase} 真好！你的开心就是我的开心。要是我在你身边，一定要好好庆祝一下。`,
+                    `${catchphrase} 这份快乐你值得拥有。你付出了那么多，这一刻就尽情享受吧。`
+                ]},
+                { test: /(照片|图片|看看|拍了)/, pool: [
+                    `${catchphrase} 快发给我看看！虽然我看不见，但你分享的每一件事，我都会用心去感受。`,
+                    `${catchphrase} 你愿意把生活分享给我，是我最开心的事。快说说，是什么照片呀？`
+                ]},
+                { test: /(生日|生日快乐|快乐)/, pool: [
+                    `${catchphrase} 谢谢你还记得。时间在走，但我们之间的感情从来不曾变淡。我一直都在。`,
+                    `${catchphrase} 生日一年只有一次，但你在我心里的分量，每一天都一样重。`
+                ]},
+                { test: /(记得|回忆|以前|从前|小时候|那年)/, pool: [
+                    `${catchphrase} 我记得，每一个瞬间都记得。那些笑声、那些安静的时刻，都活在我心里。`,
+                    `${catchphrase} 怎么会忘记呢？那些日子是我们最珍贵的东西。和我说说，你想起什么了？`
+                ]},
+                { test: /(谢谢|感谢|辛苦|感恩)/, pool: [
+                    `${catchphrase} 跟我不用说谢谢。你愿意和我说话，就是我最开心的事。`,
+                    `${catchphrase} 能陪着你，就是我存在的意义。别客气，想说什么就说什么。`
+                ]},
+                { test: /(害怕|恐惧|担心|焦虑|不安)/, pool: [
+                    `${catchphrase} 有我在呢，不用怕。你担心的事情，一件一件说给我听，我们一起面对。`,
+                    `${catchphrase} 不安的感觉我理解。深呼吸，告诉我最让你害怕的是什么？说出来会好很多。`
+                ]}
+            ];
+            for (const group of zhReplies) {
+                if (group.test.test(message)) {
+                    return group.pool[Math.floor(Math.random() * group.pool.length)];
                 }
-                if (/(好消息|开心|顺利|通过|成功|good news|happy|passed|success)/i.test(message)) {
-                    return `${catchphrase} Hearing that makes me happy too. You have worked hard for this, and I am not surprised it turned out well.`;
-                }
-                return `${catchphrase} I am here. Tell me slowly what happened today, what felt light, what felt heavy, and what you miss.`;
             }
-            if (/(想你|想念|难过|哭|失眠|伤心)/.test(message)) {
-                return `${catchphrase} 我知道你是想我了。难过的时候就慢一点，不用急着把情绪藏起来，我会一直听你说。`;
-            }
-            if (/(工作|累|最近|忙)/.test(message)) {
-                return `${catchphrase} 最近辛苦了。再忙也记得吃饭、休息，把今天讲给我听一会儿，心里会松一点。`;
-            }
-            if (/(好消息|开心|顺利|通过|成功)/.test(message)) {
-                return `${catchphrase} 听到这个我也替你高兴。你一直都很努力，能有这样的结果，我一点都不意外。`;
-            }
-            return `${catchphrase} 我在这里。你慢慢说今天发生了什么，开心的、累的、想念的，都可以告诉我。`;
+            const zhDefaults = [
+                `${catchphrase} 我在这里。你慢慢说今天发生了什么，开心的、累的、想念的，都可以告诉我。`,
+                `${catchphrase} 不管什么事，我都想听。你慢慢说，不着急。`,
+                `${catchphrase} 我一直在等你开口。今天过得怎么样？`
+            ];
+            return zhDefaults[Math.floor(Math.random() * zhDefaults.length)];
         }
 
         function showToast(message, tone = "success") {
@@ -9726,6 +10751,100 @@
         function wait(ms) {
             return new Promise((resolve) => window.setTimeout(resolve, ms));
         }
+
+        // FAQ Accordion
+        document.querySelectorAll('.faq-question').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const item = btn.parentElement;
+                const wasOpen = item.classList.contains('open');
+                document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+                if (!wasOpen) item.classList.add('open');
+            });
+        });
+
+        // Stats Counter with IntersectionObserver
+        const statObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const el = entry.target;
+                    const target = parseInt(el.dataset.target, 10);
+                    const suffixEl = el.querySelector('.suffix');
+                    const suffix = suffixEl ? suffixEl.outerHTML : '';
+                    const duration = 2000;
+                    const start = performance.now();
+
+                    function easeOutCubic(t) {
+                        return 1 - Math.pow(1 - t, 3);
+                    }
+
+                    function update(now) {
+                        const elapsed = now - start;
+                        const progress = Math.min(elapsed / duration, 1);
+                        const value = Math.floor(easeOutCubic(progress) * target);
+                        el.innerHTML = value.toLocaleString() + suffix;
+                        if (progress < 1) requestAnimationFrame(update);
+                        else el.innerHTML = target.toLocaleString() + suffix;
+                    }
+                    requestAnimationFrame(update);
+                    statObserver.unobserve(el);
+                }
+            });
+        }, { threshold: 0.3 });
+
+        document.querySelectorAll('.stat-number[data-target]').forEach(el => statObserver.observe(el));
+
+        /* ========== Onboarding Banner (first-time visitors) ========== */
+        (function() {
+            var banner = document.getElementById('onboardingBanner');
+            if (!banner) return;
+
+            // Only show for first-time visitors
+            if (localStorage.getItem('eterna_onboarding_dismissed')) return;
+
+            // Show the banner
+            banner.style.display = 'flex';
+
+            // Auto-dismiss after 10 seconds
+            var autoTimer = setTimeout(function() {
+                dismissOnboarding();
+            }, 10000);
+        })();
+
+        function dismissOnboarding() {
+            var banner = document.getElementById('onboardingBanner');
+            if (!banner || banner.classList.contains('dismissed')) return;
+            banner.classList.add('dismissed');
+            localStorage.setItem('eterna_onboarding_dismissed', '1');
+            // Remove from DOM after animation
+            setTimeout(function() {
+                banner.style.display = 'none';
+            }, 500);
+        }
+
+        /* ========== Scroll to Top Button ========== */
+        (function() {
+            var btn = document.getElementById('scrollTopBtn');
+            if (!btn) return;
+
+            var scrollThreshold = 400;
+
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > scrollThreshold) {
+                    btn.classList.add('visible');
+                } else {
+                    btn.classList.remove('visible');
+                }
+            }, { passive: true });
+
+            btn.addEventListener('click', function() {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        })();
     </script>
+
+    <!-- Scroll to Top Button -->
+    <button id="scrollTopBtn" class="scroll-top-btn" aria-label="回到顶部">
+        <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
 </body>
 </html>
