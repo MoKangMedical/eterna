@@ -3126,6 +3126,60 @@
             background: linear-gradient(180deg, rgba(255, 247, 239, 0.05), rgba(82, 49, 36, 0.2));
         }
 
+        .secure-payments-logos {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-top: 32px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .payment-logo-card {
+            padding: 28px 16px;
+            border-radius: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .payment-logo-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .payment-logo-icon {
+            font-size: 2.4rem;
+            line-height: 1;
+        }
+
+        .payment-logo-card span {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .secure-payments-trust {
+            text-align: center;
+            margin-top: 28px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        @media (max-width: 640px) {
+            .secure-payments-logos {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
         .footer {
             max-width: var(--max-width);
             margin: 0 auto;
@@ -5174,97 +5228,29 @@
 
             <section class="section reveal">
                 <div class="section-heading">
-                    <p id="paymentsEyebrow" class="eyebrow">出海支付准备</p>
-                    <h2 id="paymentsHeading">把海外收款先准备成一套可切换的底盘</h2>
-                    <p id="paymentsIntro">在 Stripe 正式上线前，先把 PayPal、Creem、Stripe 三条路梳理清楚：谁适合低门槛试水，谁适合早期独立开发，谁适合长期 SaaS 运营。</p>
+                    <p class="eyebrow">安全支付</p>
+                    <h2>支持多种安全支付方式</h2>
+                    <p>采用全球主流支付平台，保障每一次交易安全可靠。</p>
                 </div>
-                <div class="payments-grid">
-                    <article class="payments-journal glass-panel">
-                        <div class="payments-journal-head">
-                            <span id="paymentsBadge" class="entry-badge">独立开发记录</span>
-                            <span id="paymentsMeta" class="status-detail">周末碎片时间，也先把海外收款路径走通。</span>
-                        </div>
-                        <h3 id="paymentsJournalTitle">不要把所有收款都压在单一渠道上</h3>
-                        <p id="paymentsJournalText">对于独立站和海外 SaaS，Stripe 最方便，但风控也最严格。更稳妥的做法是先准备低门槛渠道跑实验，再为长期订阅业务准备更稳的收款底盘。</p>
-                        <div class="payments-points">
-                            <div class="payments-point">
-                                <strong id="paymentsPoint1Title">APP 与独立站不是同一题</strong>
-                                <p id="paymentsPoint1Text">iOS 可以更多依赖 Apple Pay；独立站和 SaaS 则需要自己搭建 checkout、webhook、权限同步和风控预案。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint2Title">先有备份渠道，再上主渠道</strong>
-                                <p id="paymentsPoint2Text">Stripe 体验最好，但封控也最严格。先把 PayPal 和 Creem 这样的补充渠道准备好，业务才不至于被单点卡死。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint3Title">产品、税费和 webhook 要一起设计</strong>
-                                <p id="paymentsPoint3Text">价格展示、税费是否含税、支付完成回调、权限开通和用户重定向，必须在同一条链路里一起跑通。</p>
-                            </div>
-                            <div class="payments-point">
-                                <strong id="paymentsPoint4Title">念念当前的准备方向</strong>
-                                <p id="paymentsPoint4Text">主页先把全球收款策略说明清楚，下一步再接正式 checkout、webhook、套餐权限和多通道回退。</p>
-                            </div>
-                        </div>
-                    </article>
-                    <div class="payments-channel-stack">
-                        <article class="payment-channel-card paypal">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">PayPal</span>
-                                <span id="paypalStatus" class="entry-badge">低门槛实验渠道</span>
-                            </div>
-                            <h3 id="paypalTitle">适合先跑通第一笔海外收入</h3>
-                            <p id="paypalText">个人 PayPal 配合 Ko-fi 一类的平台就能先开始，门槛低，适合验证需求，但不适合作为唯一支付通道。</p>
-                            <ul>
-                                <li id="paypalPoint1">优点：个人账号 + 信用卡即可起步</li>
-                                <li id="paypalPoint2">限制：主要依赖 PayPal 本身，信用卡路径不够完整</li>
-                                <li id="paypalPoint3">适合：最早期验证、赞助与补充收款</li>
-                            </ul>
-                        </article>
-                        <article class="payment-channel-card creem">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">Creem</span>
-                                <span id="creemStatus" class="entry-badge">大陆开发者友好</span>
-                            </div>
-                            <h3 id="creemTitle">适合个人开发者先把 SaaS 支付跑起来</h3>
-                            <p id="creemText">不用先注册公司，对大陆开发者更友好，测试和联调也快，但要认真准备 KYC、产品说明和 webhook 链路。</p>
-                            <ul>
-                                <li id="creemPoint1">优点：不强制公司主体，可接支付宝收款</li>
-                                <li id="creemPoint2">注意：身份验证更建议用护照，不要只依赖身份证</li>
-                                <li id="creemPoint3">适合：早期 SaaS、测试环境联调、补充渠道</li>
-                            </ul>
-                        </article>
-                        <article class="payment-channel-card stripe">
-                            <div class="payment-channel-head">
-                                <span class="payment-channel-badge">Stripe</span>
-                                <span id="stripeStatus" class="entry-badge">长期主渠道</span>
-                            </div>
-                            <h3 id="stripeTitle">适合把订阅、权限和全球支付做成标准底层</h3>
-                            <p id="stripeText">Stripe 体验完整、生态成熟，最适合长期 SaaS 运营，但开户和风控要求也最高，必须把公司、银行和合规链路一次准备好。</p>
-                            <ul>
-                                <li id="stripePoint1">优点：开发体验完整，订阅与 webhook 生态成熟</li>
-                                <li id="stripePoint2">挑战：风控严格，主体、银行和资料要更扎实</li>
-                                <li id="stripePoint3">适合：长期订阅、正式收费、全球标准化支付</li>
-                            </ul>
-                        </article>
+                <div class="secure-payments-logos">
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">💳</div>
+                        <span>Stripe</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🅿️</div>
+                        <span>PayPal</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🍎</div>
+                        <span>Apple Pay</span>
+                    </div>
+                    <div class="payment-logo-card glass-panel">
+                        <div class="payment-logo-icon">🔒</div>
+                        <span>SSL 加密</span>
                     </div>
                 </div>
-                <div class="payments-roadmap">
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap1Title">1. 多渠道备份</strong>
-                        <span id="paymentsRoadmap1Text">先准备 PayPal / Creem / Stripe 的角色分工，避免被单一风控卡住。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap2Title">2. 测试链路跑通</strong>
-                        <span id="paymentsRoadmap2Text">先在测试环境把 checkout、webhook、权限发放和返回页都验证完整。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap3Title">3. 定价与税费一致</strong>
-                        <span id="paymentsRoadmap3Text">价格展示、税费含不含税、套餐权限、订阅状态要在前后端保持一致。</span>
-                    </article>
-                    <article class="payments-roadmap-step">
-                        <strong id="paymentsRoadmap4Title">4. 正式收款上线</strong>
-                        <span id="paymentsRoadmap4Text">等主体、账号、风控和文档稳定后，再打开真实的全球支付入口。</span>
-                    </article>
-                </div>
+                <p class="secure-payments-trust">所有支付信息均经过加密处理，我们不会存储您的支付卡号。支持退款保障，让您安心订阅。</p>
             </section>
         </main>
 
