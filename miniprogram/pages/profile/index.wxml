@@ -1,0 +1,62 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="page-title">{{user.display_name || '念念用户'}}</view>
+    <view class="page-subtitle">{{user.email}}</view>
+    <button class="ghost-button" style="margin-top: 22rpx;" bindtap="refreshPage">刷新资料</button>
+  </view>
+
+  <view wx:if="{{subscription}}" class="profile-card">
+    <view class="section-title">当前套餐</view>
+    <view class="profile-line">
+      <text>{{subscription.plan_name}}</text>
+      <text class="soft-tag">{{subscription.status}}</text>
+    </view>
+    <view class="section-tip">周期：{{subscription.billing_period}} · 价格：¥{{subscription.price_cny}}</view>
+  </view>
+
+  <view wx:if="{{stats}}" class="profile-card">
+    <view class="section-title">数据概览</view>
+    <view class="profile-grid">
+      <view class="profile-metric">
+        <view class="stat-value">{{stats.total_messages || 0}}</view>
+        <view class="muted-text">对话次数</view>
+      </view>
+      <view class="profile-metric">
+        <view class="stat-value">{{stats.total_assets || 0}}</view>
+        <view class="muted-text">素材数量</view>
+      </view>
+      <view class="profile-metric">
+        <view class="stat-value">{{stats.total_memories || 0}}</view>
+        <view class="muted-text">回忆数量</view>
+      </view>
+      <view class="profile-metric">
+        <view class="stat-value">{{stats.unread_proactive_count || 0}}</view>
+        <view class="muted-text">未读主动联系</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="profile-card">
+    <view class="section-title">跨端能力</view>
+    <view class="profile-line">
+      <text>微信小程序状态</text>
+      <text class="soft-tag">{{miniprogram.status || 'scaffold_ready'}}</text>
+    </view>
+    <view class="profile-line">
+      <text>电话桥接</text>
+      <text class="soft-tag">{{bridge.provider || 'none'}}</text>
+    </view>
+    <view class="profile-line">
+      <text>视频链路</text>
+      <text class="soft-tag">{{featureFlags.comfyui_video_pipeline ? 'ready' : 'pending'}}</text>
+    </view>
+    <view class="section-tip" style="margin-top: 16rpx;">
+      当前先复用网页端账号和 REST API；微信登录、订阅消息、正式支付将作为小程序第二阶段接入。
+    </view>
+  </view>
+
+  <view class="profile-card">
+    <view class="section-title">退出登录</view>
+    <button class="warm-button" style="margin-top: 18rpx;" bindtap="handleLogout">退出当前账号</button>
+  </view>
+</view>

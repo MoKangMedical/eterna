@@ -1,0 +1,43 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="page-title">念念 Eterna</view>
+    <view class="page-subtitle">
+      让亲人的声音、面容、记忆与陪伴，以更温柔的方式留在你身边。
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-title">账号登录</view>
+    <view class="section-tip">当前小程序先复用网页端账号体系，微信登录留在下一阶段接入。</view>
+
+    <input
+      class="input-field"
+      placeholder="邮箱"
+      type="text"
+      value="{{email}}"
+      bindinput="handleEmailInput"
+    />
+
+    <input
+      class="input-field"
+      style="margin-top: 20rpx;"
+      placeholder="密码"
+      password="{{true}}"
+      value="{{password}}"
+      bindinput="handlePasswordInput"
+    />
+
+    <view wx:if="{{errorMessage}}" class="section-tip" style="color:#b65842; margin-top: 18rpx;">
+      {{errorMessage}}
+    </view>
+
+    <button
+      class="warm-button"
+      style="margin-top: 28rpx;"
+      loading="{{loading}}"
+      bindtap="submitLogin"
+    >
+      进入念念
+    </button>
+  </view>
+</view>

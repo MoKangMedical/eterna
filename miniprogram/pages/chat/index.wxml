@@ -1,0 +1,51 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="page-title">对话陪伴</view>
+    <view class="page-subtitle">继续沿用网页端的记忆上下文、语音模式和视频模式。</view>
+  </view>
+
+  <view wx:if="{{lovedOnes.length}}" class="section-card">
+    <view class="section-title">选择亲人</view>
+    <picker range="{{lovedOnes}}" range-key="name" value="{{pickerIndex}}" bindchange="handleLovedOneChange">
+      <view class="picker-shell">
+        <text>{{lovedOnes[pickerIndex].name}} · {{lovedOnes[pickerIndex].relationship}}</text>
+        <text class="muted-text">切换</text>
+      </view>
+    </picker>
+
+    <view class="section-title" style="margin-top: 22rpx;">陪伴方式</view>
+    <picker range="{{modeOptions}}" range-key="label" value="{{modeIndex}}" bindchange="handleModeChange">
+      <view class="picker-shell">
+        <text>{{modeOptions[modeIndex].label}}</text>
+        <text class="muted-text">后端会自动判断是否需要回退</text>
+      </view>
+    </picker>
+  </view>
+
+  <view class="chat-card">
+    <view wx:if="{{!messages.length}}" class="empty-state">
+      还没有对话记录，先发出第一句想念的话。
+    </view>
+
+    <view wx:for="{{messages}}" wx:key="id" class="message-row {{item.role === 'user' ? 'message-row-user' : 'message-row-ai'}}">
+      <view class="message-bubble {{item.role === 'user' ? 'message-bubble-user' : 'message-bubble-ai'}}">
+        <view class="message-text">{{item.text}}</view>
+        <video wx:if="{{item.videoUrl}}" class="bubble-video" src="{{item.videoUrl}}" controls="{{true}}" />
+        <audio wx:if="{{item.audioUrl}}" class="bubble-audio" src="{{item.audioUrl}}" controls="{{true}}" />
+      </view>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <textarea
+      class="text-area"
+      placeholder="想对 TA 说点什么？"
+      value="{{draft}}"
+      bindinput="updateDraft"
+    />
+    <view wx:if="{{errorMessage}}" class="section-tip" style="color:#b65842; margin-top: 14rpx;">
+      {{errorMessage}}
+    </view>
+    <button class="warm-button" style="margin-top: 20rpx;" loading="{{sending}}" bindtap="sendMessage">发送</button>
+  </view>
+</view>

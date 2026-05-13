@@ -1,0 +1,71 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="page-title">欢迎回来，{{user.display_name || '念念用户'}}</view>
+    <view class="page-subtitle">
+      小程序会直接复用你的数字人档案、记忆库、主动联系和对话能力。
+    </view>
+    <button class="ghost-button" style="margin-top: 24rpx;" bindtap="refreshPage">刷新工作台</button>
+  </view>
+
+  <view wx:if="{{errorMessage}}" class="section-card">
+    <view class="section-tip" style="color:#b65842;">{{errorMessage}}</view>
+  </view>
+
+  <view class="section-card" wx:if="{{stats}}">
+    <view class="section-title">工作台概览</view>
+    <view class="stats-grid">
+      <view class="stat-item">
+        <view class="stat-value">{{stats.total_loved_ones || 0}}</view>
+        <view class="muted-text">亲人档案</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{stats.total_memories || 0}}</view>
+        <view class="muted-text">回忆片段</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{stats.total_assets || 0}}</view>
+        <view class="muted-text">多模态素材</view>
+      </view>
+      <view class="stat-item">
+        <view class="stat-value">{{stats.unread_proactive_count || 0}}</view>
+        <view class="muted-text">待查看主动联系</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-title">数字家人列表</view>
+    <view class="section-tip">先从已有档案进入纪念册或对话页，后续再补微信登录和新建流程。</view>
+
+    <view wx:if="{{!lovedOnes.length}}" class="empty-state">
+      当前还没有亲人档案，请先在网页端建立第一位亲人的纪念档案。
+    </view>
+
+    <view wx:for="{{lovedOnes}}" wx:key="id" class="loved-card">
+      <image
+        wx:if="{{item.cover_photo_url}}"
+        class="cover-photo"
+        mode="aspectFill"
+        src="{{item.cover_photo_url}}"
+      />
+      <view class="loved-card-main">
+        <view class="loved-card-header">
+          <view>
+            <view class="loved-name">{{item.name}}</view>
+            <view class="muted-text">{{item.relationship}}</view>
+          </view>
+          <view class="soft-tag">{{item.completion_percent}}%</view>
+        </view>
+        <view class="loved-summary">{{item.workflow_summary || item.identity_model_summary}}</view>
+        <view class="loved-meta-row">
+          <view class="soft-tag">模式 {{item.modeText}}</view>
+          <view class="soft-tag">素材 {{item.media_counts.photo + item.media_counts.voice + item.media_counts.video + item.media_counts.model3d}}</view>
+        </view>
+        <view class="loved-actions">
+          <button class="ghost-button action-button" data-id="{{item.id}}" bindtap="openArchive">打开纪念册</button>
+          <button class="warm-button action-button" data-id="{{item.id}}" bindtap="openChat">开始对话</button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

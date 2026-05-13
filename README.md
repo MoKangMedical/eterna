@@ -9,6 +9,8 @@
 - 生产域名：https://eterna-niannian.cloud
 - 部署服务器：43.134.3.158
 - 部署说明：`deploy/README.md`
+- 微信小程序骨架：`miniprogram/`
+- 历史归档说明：`docs/archive-merge-20260513.md`
 
 ---
 
@@ -165,6 +167,13 @@
 - ✅ 文字对话（MIMO API + 记忆系统）
 - ✅ 照片上传 + 简单视频生成
 - ✅ 微信小程序框架
+
+### 微信小程序准备度
+
+- 已补统一聚合接口：`/api/client/bootstrap`、`/api/loved-ones/{id}/timeline`、`/api/miniprogram/config`
+- 已补原生小程序骨架：登录、首页、纪念册、对话、我的
+- 当前先复用现有邮箱密码登录和 REST API
+- 下一阶段接微信登录、订阅消息与正式支付
 
 ### Phase 2（4周）
 - 🔲 实时视频通话（LivePortrait）

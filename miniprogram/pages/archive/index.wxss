@@ -1,0 +1,46 @@
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.timeline-item {
+  margin-top: 22rpx;
+  padding: 22rpx;
+  border-radius: 22rpx;
+  background: #fff8ef;
+}
+
+.timeline-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timeline-title {
+  margin-top: 14rpx;
+  font-size: 29rpx;
+  font-weight: 600;
+  color: #5d402c;
+}
+
+.timeline-summary {
+  margin-top: 12rpx;
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #7d634d;
+}
+
+.timeline-photo,
+.timeline-video {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 18rpx;
+  margin-top: 18rpx;
+}
+
+.timeline-audio {
+  width: 100%;
+  margin-top: 16rpx;
+}

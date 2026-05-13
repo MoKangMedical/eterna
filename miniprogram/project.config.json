@@ -1,0 +1,20 @@
+{
+  "description": "念念 Eterna 微信小程序骨架",
+  "packOptions": {
+    "ignore": []
+  },
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "coverView": true,
+    "ignoreUploadUnusedFiles": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.6.1",
+  "appid": "touristappid",
+  "projectname": "eterna-niannian-miniprogram",
+  "condition": {}
+}

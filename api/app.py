@@ -11,6 +11,7 @@ import html
 import json
 import mimetypes
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -18,6 +19,7 @@ import subprocess
 import threading
 import time
 import time as _time
+import tempfile
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -249,9 +251,24 @@ logger.info("✅ 情感表达系统初始化完成")
 logger.info("🎉 所有增强系统初始化完成！")
 
 
-MIMO_API_BASE = runtime_config("MIMO_API_BASE", "https://api.xiaomimimo.com/v1")
+MIMO_API_BASE = runtime_config("MIMO_API_BASE", runtime_config("MIMO_BASE_URL", "https://api.xiaomimimo.com/v1"))
 MIMO_API_KEY = runtime_config("MIMO_API_KEY", "")
+MIMO_CHAT_MODEL = runtime_config("MIMO_CHAT_MODEL", "mimo-v2-pro")
+MIMO_OMNI_MODEL = runtime_config("MIMO_OMNI_MODEL", "mimo-v2-omni")
 MIMO_TTS_VOICE = runtime_config("MIMO_TTS_VOICE", "default_zh")
+COMFYUI_API_BASE = runtime_config("COMFYUI_API_BASE", runtime_config("COMFYUI_BASE_URL", "http://127.0.0.1:8188")).rstrip("/")
+COMFYUI_CHECKPOINT = runtime_config("COMFYUI_CHECKPOINT", "DreamShaper_8_pruned.safetensors")
+COMFYUI_NEGATIVE_PROMPT = runtime_config(
+    "COMFYUI_NEGATIVE_PROMPT",
+    "low quality, blurry, deformed hands, duplicated face, distorted eyes, extra limbs, text, watermark, logo, frame",
+)
+COMFYUI_STEPS = max(8, min(40, int(runtime_config("COMFYUI_STEPS", "12"))))
+COMFYUI_CFG = max(1.0, min(12.0, float(runtime_config("COMFYUI_CFG", "6.5"))))
+COMFYUI_DENOISE = max(0.15, min(1.0, float(runtime_config("COMFYUI_DENOISE", "0.42"))))
+COMFYUI_TIMEOUT_SECONDS = max(15, min(180, int(runtime_config("COMFYUI_TIMEOUT_SECONDS", "90"))))
+COMFYUI_POLL_INTERVAL = max(1.0, min(5.0, float(runtime_config("COMFYUI_POLL_INTERVAL", "1.5"))))
+COMFYUI_IMAGE_WIDTH = max(512, min(1536, int(runtime_config("COMFYUI_IMAGE_WIDTH", "1024"))))
+COMFYUI_IMAGE_HEIGHT = max(288, min(1536, int(runtime_config("COMFYUI_IMAGE_HEIGHT", "576"))))
 ADMIN_EMAILS = runtime_config("ADMIN_EMAILS", "")
 PUBLIC_BASE_URL = runtime_config("PUBLIC_BASE_URL", "").rstrip("/")
 APP_BASE_URL = runtime_config("APP_BASE_URL", PUBLIC_BASE_URL or "http://localhost:8102").rstrip("/")
@@ -283,13 +300,38 @@ DEFAULT_TIMEZONE = runtime_config("DEFAULT_TIMEZONE", "Asia/Shanghai")
 PROACTIVE_POLL_SECONDS = max(20, int(runtime_config("PROACTIVE_POLL_SECONDS", "60")))
 MIMO_VIDEO_MODEL = runtime_config("MIMO_VIDEO_MODEL", "mimo-v2-omni")
 MIMO_VIDEO_MAX_SECONDS = max(6, min(30, int(runtime_config("MIMO_VIDEO_MAX_SECONDS", "18"))))
+MINIPROGRAM_APP_NAME = runtime_config("MINIPROGRAM_APP_NAME", "念念 Eterna")
+MINIPROGRAM_APP_ID = runtime_config("MINIPROGRAM_APP_ID", "")
+MINIPROGRAM_API_BASE = runtime_config("MINIPROGRAM_API_BASE", PUBLIC_BASE_URL or APP_BASE_URL).rstrip("/")
+MINIPROGRAM_DEFAULT_LOCALE = runtime_config("MINIPROGRAM_DEFAULT_LOCALE", "zh-CN")
+MINIPROGRAM_STATUS = runtime_config("MINIPROGRAM_STATUS", "scaffold_ready")
+MINIPROGRAM_UPLOAD_MAX_MB = max(20, min(1024, int(runtime_config("MINIPROGRAM_UPLOAD_MAX_MB", "200"))))
 FFMPEG_BIN = shutil.which("ffmpeg") or ""
+
+def current_llm_provider_name() -> str:
+    base = (MIMO_API_BASE or "").lower()
+    if "deepseek" in base:
+        return "deepseek"
+    if "xiaomimimo" in base or "mimo" in base:
+        return "mimo"
+    return "openai_compatible"
+
+
+def is_deepseek_provider() -> bool:
+    return current_llm_provider_name() == "deepseek"
+
+
+def provider_supports_multimodal() -> bool:
+    return not is_deepseek_provider()
+
 
 logger.info("念念 Eterna v%s starting", "2.0.0")
 logger.info("  Database: %s", DB_PATH)
 logger.info("  MIMO API: %s", "configured" if MIMO_API_KEY else "not configured")
+logger.info("  ComfyUI: %s", COMFYUI_API_BASE or "not configured")
 logger.info("  Stripe: %s", "configured" if STRIPE_SECRET_KEY else "not configured")
 logger.info("  FFmpeg: %s", "configured" if FFMPEG_BIN else "not configured")
+logger.info("  LLM Provider: %s (%s)", current_llm_provider_name(), MIMO_CHAT_MODEL)
 
 _proactive_worker_started = False
 _proactive_worker_lock = threading.Lock()
@@ -2835,18 +2877,364 @@ def serialize_loved_one(
     )
 
 
+def build_service_capabilities(subscription: Optional[dict] = None) -> dict:
+    features = (subscription or {}).get(
+        "features",
+        {
+            "text": True,
+            "voice": True,
+            "video": True,
+            "voice_upload": True,
+            "video_upload": True,
+        },
+    )
+    return {
+        "text_chat": bool(features.get("text", True)),
+        "voice_chat": bool(features.get("voice", True)),
+        "video_chat": bool(features.get("video", True)),
+        "photo_upload": True,
+        "voice_upload": bool(features.get("voice_upload", True)),
+        "video_upload": bool(features.get("video_upload", True)),
+        "model3d_upload": bool(features.get("video_upload", True)),
+        "digital_human_console": True,
+        "proactive_app": True,
+        "proactive_phone": get_call_bridge_provider() != "none",
+        "stripe_billing": bool(STRIPE_SECRET_KEY),
+        "comfyui_video_pipeline": bool(FFMPEG_BIN and is_comfyui_enabled()),
+        "mini_program_scaffold": True,
+        "wechat_login": False,
+    }
+
+
+def build_miniprogram_config() -> dict:
+    tabs = [
+        {"path": "pages/home/index", "label": "首页", "label_en": "Home"},
+        {"path": "pages/archive/index", "label": "纪念册", "label_en": "Archive"},
+        {"path": "pages/chat/index", "label": "对话", "label_en": "Chat"},
+        {"path": "pages/profile/index", "label": "我的", "label_en": "Profile"},
+    ]
+    return {
+        "status": MINIPROGRAM_STATUS,
+        "app_name": MINIPROGRAM_APP_NAME,
+        "app_id": MINIPROGRAM_APP_ID or None,
+        "brand_tagline": "念念不忘，ta一直在",
+        "version": str(app.version),
+        "default_locale": MINIPROGRAM_DEFAULT_LOCALE,
+        "api_base": MINIPROGRAM_API_BASE or APP_BASE_URL,
+        "auth_mode": "bearer_token",
+        "supported_languages": ["zh-CN", "en"],
+        "llm_provider": current_llm_provider_name(),
+        "capabilities": build_service_capabilities(),
+        "upload_limits": {
+            "max_file_mb": MINIPROGRAM_UPLOAD_MAX_MB,
+            "accepted_media_kinds": ["voice", "photo", "video", "model3d"],
+        },
+        "tabs": tabs,
+        "pages": [
+            {"path": "pages/login/index", "title": "登录 / Login"},
+            *tabs,
+        ],
+        "notes": [
+            "当前小程序骨架已可直接复用现有账号体系和 REST API。",
+            "微信登录、订阅消息和正式审核配置留在下一阶段接入。",
+        ],
+    }
+
+
+def serialize_loved_one_client_summary(
+    conn: sqlite3.Connection,
+    loved_one_row: sqlite3.Row,
+    *,
+    subscription: Optional[dict] = None,
+) -> dict:
+    loved_one = serialize_loved_one(conn, loved_one_row, subscription=subscription).model_dump()
+    twin = loved_one.get("digital_twin_profile") or {}
+    model = loved_one.get("digital_human_model") or {}
+    proactive = loved_one.get("proactive_profile") or {}
+    media_counts = {
+        "voice": len(loved_one.get("voice_sample_urls") or []),
+        "photo": len(loved_one.get("photo_urls") or []),
+        "video": len(loved_one.get("video_urls") or []),
+        "model3d": len(loved_one.get("model3d_urls") or []),
+    }
+    return {
+        "id": loved_one["id"],
+        "name": loved_one["name"],
+        "relationship": loved_one["relationship"],
+        "cover_title": loved_one.get("cover_title") or "",
+        "cover_photo_asset_id": loved_one.get("cover_photo_asset_id"),
+        "cover_photo_url": loved_one.get("cover_photo_url"),
+        "identity_model_summary": loved_one.get("identity_model_summary") or "",
+        "completion_percent": int(twin.get("completion_percent") or 0),
+        "completeness_label": twin.get("completeness_label") or "",
+        "workflow_summary": twin.get("workflow_summary") or "",
+        "current_stage_title": twin.get("current_stage_title") or "",
+        "available_modes": twin.get("available_modes", ["text"]),
+        "memory_count": len(loved_one.get("memories") or []),
+        "media_counts": media_counts,
+        "digital_human_status": model.get("build_status") or "pending",
+        "digital_human_version": int(model.get("build_version") or 1),
+        "knowledge_count": int(model.get("knowledge_count") or 0),
+        "proactive_profile": proactive,
+        "bridge_status": build_call_bridge_status(
+            loved_one=loved_one,
+            proactive_flow=proactive,
+            subscription=subscription,
+        ),
+        "created_at": loved_one.get("created_at"),
+        "updated_at": loved_one.get("updated_at"),
+    }
+
+
+def build_loved_one_timeline(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    loved_one_id: str,
+    limit: int = 60,
+) -> List[dict]:
+    sample_limit = max(20, min(240, int(limit) * 4))
+    memory_rows = conn.execute(
+        """
+        SELECT id, content, memory_type, memory_date, importance, created_at
+        FROM memories
+        WHERE loved_one_id = ? AND user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (loved_one_id, user_id, sample_limit),
+    ).fetchall()
+    media_rows = conn.execute(
+        """
+        SELECT *
+        FROM media_assets
+        WHERE loved_one_id = ? AND user_id = ? AND kind IN ('voice', 'photo', 'video', 'model3d')
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (loved_one_id, user_id, sample_limit),
+    ).fetchall()
+    chat_rows = conn.execute(
+        """
+        SELECT id, created_at, user_message, ai_response, emotion, mode,
+               response_audio_asset_id, response_video_asset_id
+        FROM chat_messages
+        WHERE loved_one_id = ? AND user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (loved_one_id, user_id, sample_limit),
+    ).fetchall()
+    proactive_rows = conn.execute(
+        """
+        SELECT *
+        FROM proactive_events
+        WHERE loved_one_id = ? AND user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (loved_one_id, user_id, sample_limit),
+    ).fetchall()
+    build_rows = conn.execute(
+        """
+        SELECT *
+        FROM digital_human_build_runs
+        WHERE loved_one_id = ? AND user_id = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (loved_one_id, user_id, sample_limit),
+    ).fetchall()
+
+    items: List[dict] = []
+    for row in memory_rows:
+        items.append(
+            {
+                "id": row["id"],
+                "item_type": "memory",
+                "subtype": row["memory_type"],
+                "title": "新增回忆片段",
+                "summary": row["content"],
+                "created_at": row["created_at"],
+                "media_url": None,
+                "audio_url": None,
+                "video_url": None,
+                "metadata": {
+                    "importance": row["importance"],
+                    "memory_date": row["memory_date"],
+                },
+            }
+        )
+
+    media_titles = {
+        "voice": "新增语音样本",
+        "photo": "新增照片素材",
+        "video": "新增视频素材",
+        "model3d": "新增 3D 重建素材",
+    }
+    for row in media_rows:
+        asset = serialize_media_asset(row)
+        items.append(
+            {
+                "id": row["id"],
+                "item_type": "media",
+                "subtype": row["kind"],
+                "title": media_titles.get(row["kind"], "新增素材"),
+                "summary": asset.get("summary") or asset.get("original_filename") or "",
+                "created_at": row["created_at"],
+                "media_url": asset["url"],
+                "audio_url": asset["url"] if row["kind"] == "voice" else None,
+                "video_url": asset["url"] if row["kind"] == "video" else None,
+                "metadata": {
+                    "mime_type": asset["mime_type"],
+                    "byte_size": asset["byte_size"],
+                    "tags": asset.get("tags", []),
+                    "is_primary": asset.get("is_primary", False),
+                    **asset.get("metadata", {}),
+                },
+            }
+        )
+
+    for row in chat_rows:
+        audio_ref = get_media_asset_reference(conn, row["response_audio_asset_id"])
+        video_ref = get_media_asset_reference(conn, row["response_video_asset_id"])
+        items.append(
+            {
+                "id": row["id"],
+                "item_type": "conversation",
+                "subtype": row["mode"],
+                "title": "陪伴对话",
+                "summary": row["ai_response"],
+                "created_at": row["created_at"],
+                "media_url": video_ref["url"] if video_ref else audio_ref["url"] if audio_ref else None,
+                "audio_url": audio_ref["url"] if audio_ref else None,
+                "video_url": video_ref["url"] if video_ref else None,
+                "metadata": {
+                    "emotion": row["emotion"],
+                    "user_message": row["user_message"],
+                },
+            }
+        )
+
+    for row in proactive_rows:
+        audio_ref, video_ref = proactive_event_media_refs(conn, row["audio_asset_id"], row["video_asset_id"])
+        items.append(
+            {
+                "id": row["id"],
+                "item_type": "proactive",
+                "subtype": row["event_type"],
+                "title": row["title"] or "主动联系",
+                "summary": row["message_text"],
+                "created_at": row["created_at"],
+                "media_url": (video_ref or audio_ref or {}).get("url") if (video_ref or audio_ref) else None,
+                "audio_url": audio_ref["url"] if audio_ref else None,
+                "video_url": video_ref["url"] if video_ref else None,
+                "metadata": {
+                    "channel": row["channel"],
+                    "status": row["status"],
+                    "scheduled_for": row["scheduled_for"],
+                    "delivered_at": row["delivered_at"],
+                    "consumed_at": row["consumed_at"],
+                    "source_kind": row["source_kind"],
+                    **json_object(row["metadata_json"]),
+                },
+            }
+        )
+
+    for row in build_rows:
+        items.append(
+            {
+                "id": row["id"],
+                "item_type": "digital_human_build",
+                "subtype": row["status"],
+                "title": "数字人重建记录",
+                "summary": row["notes"] or "数字人模型已更新",
+                "created_at": row["created_at"],
+                "media_url": None,
+                "audio_url": None,
+                "video_url": None,
+                "metadata": {
+                    "trigger_source": row["trigger_source"],
+                    "source_counts": json_object(row["source_counts_json"]),
+                    "completed_at": row["completed_at"],
+                    "updated_at": row["updated_at"],
+                },
+            }
+        )
+
+    items.sort(key=lambda item: item["created_at"] or "", reverse=True)
+    return items[: max(1, min(120, int(limit)))]
+
+
 # ===== MIMO =====
 
 
 async def call_mimo_chat_completion(payload: dict, timeout: float = 60.0) -> dict:
+    normalized_payload = normalize_chat_payload_for_provider(payload)
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             f"{MIMO_API_BASE}/chat/completions",
             headers=mimo_headers(),
-            json=payload,
+            json=normalized_payload,
         )
         response.raise_for_status()
         return response.json()
+
+
+def choose_chat_model(*, prefer_multimodal: bool = False) -> str:
+    if prefer_multimodal and provider_supports_multimodal():
+        return MIMO_OMNI_MODEL or MIMO_CHAT_MODEL
+    return MIMO_CHAT_MODEL
+
+
+def flatten_provider_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return str(content or "")
+
+    parts: List[str] = []
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        part_type = item.get("type")
+        if part_type == "text":
+            text = str(item.get("text") or "").strip()
+            if text:
+                parts.append(text)
+        elif part_type == "image_url":
+            parts.append("[已提供照片素材]")
+        elif part_type == "input_audio":
+            parts.append("[已提供语音样本]")
+        elif part_type == "video_url":
+            parts.append("[已提供视频素材]")
+    return "\n".join(parts).strip()
+
+
+def normalize_chat_payload_for_provider(payload: dict) -> dict:
+    normalized = dict(payload)
+    if not is_deepseek_provider():
+        return normalized
+
+    normalized["model"] = choose_chat_model(
+        prefer_multimodal=str(normalized.get("model") or "").startswith("mimo-v2-omni")
+    )
+    if "max_completion_tokens" in normalized and "max_tokens" not in normalized:
+        normalized["max_tokens"] = normalized.pop("max_completion_tokens")
+    normalized.pop("audio", None)
+
+    messages = []
+    for message in normalized.get("messages", []):
+        if not isinstance(message, dict):
+            continue
+        messages.append(
+            {
+                "role": message.get("role", "user"),
+                "content": flatten_provider_content(message.get("content")),
+            }
+        )
+    normalized["messages"] = messages
+    return normalized
 
 
 def build_media_content_part(
@@ -2888,6 +3276,13 @@ async def analyze_media_with_mimo(
 ) -> Optional[str]:
     if not MIMO_API_KEY:
         return None
+    if not provider_supports_multimodal():
+        local_summaries = {
+            "voice": "已上传语音样本，可用于提炼这个人的停顿、语速和亲近感，但当前语音总结先走本地保底描述。",
+            "photo": "已上传照片素材，可用于补足这个人的面容、神情和熟悉气质，但当前视觉总结先走本地保底描述。",
+            "video": "已上传视频素材，可用于补足这个人的动作节奏和在场感，但当前动态总结先走本地保底描述。",
+        }
+        return local_summaries.get(media_type)
 
     content_part = build_media_content_part(media_type, file_path, request=request)
     if not content_part:
@@ -2900,7 +3295,7 @@ async def analyze_media_with_mimo(
     }
 
     payload = {
-        "model": "mimo-v2-omni",
+        "model": choose_chat_model(prefer_multimodal=True),
         "messages": [
             {
                 "role": "system",
@@ -2919,7 +3314,7 @@ async def analyze_media_with_mimo(
         result = await call_mimo_chat_completion(payload)
         return (result["choices"][0]["message"]["content"] or "").strip()
     except Exception:
-        logger.warning("MIMO chat completion failed", exc_info=True)
+        logger.warning("Remote LLM chat completion failed", exc_info=True)
         return None
 
 
@@ -2972,6 +3367,8 @@ def build_personality_prompt(loved_one: dict) -> str:
 
 
 def build_multimodal_context_parts(loved_one: dict, request: Optional[Request], mode: str) -> List[dict]:
+    if not provider_supports_multimodal():
+        return []
     content_parts: List[dict] = []
     if loved_one.get("voice_sample_paths"):
         voice_part = build_media_content_part("voice", Path(loved_one["voice_sample_paths"][-1]), request=request)
@@ -3020,7 +3417,7 @@ async def generate_text_response_with_mimo(
 
     if media_parts:
         payload = {
-            "model": "mimo-v2-omni",
+            "model": choose_chat_model(prefer_multimodal=True),
             "messages": [
                 {"role": "system", "content": instruction},
                 {
@@ -3036,7 +3433,7 @@ async def generate_text_response_with_mimo(
         }
     else:
         payload = {
-            "model": "mimo-v2-pro",
+            "model": choose_chat_model(prefer_multimodal=False),
             "messages": [
                 {
                     "role": "user",
@@ -3092,6 +3489,84 @@ def persist_generated_media_asset(
     return {"asset_id": asset_id, "url": public_media_url(str(file_path)), "path": str(file_path)}
 
 
+def pick_local_tts_voice(conn: sqlite3.Connection, loved_one_id: str) -> str:
+    row = conn.execute(
+        "SELECT name, relationship FROM loved_ones WHERE id = ?",
+        (loved_one_id,),
+    ).fetchone()
+    relationship_text = f"{(row['name'] if row else '') or ''} {(row['relationship'] if row else '') or ''}".lower()
+    if any("\u4e00" <= ch <= "\u9fff" for ch in relationship_text):
+        return "Tingting"
+    if any(keyword in relationship_text for keyword in ["爷爷", "外公", "爸爸", "父亲", "grandpa", "father", "dad"]):
+        return "Grandpa"
+    if any(keyword in relationship_text for keyword in ["奶奶", "外婆", "妈妈", "母亲", "grandma", "mother", "mom"]):
+        return "Tingting"
+    return "Tingting"
+
+
+def sanitize_local_tts_text(text: str) -> str:
+    value = str(text or "").strip()
+    value = re.sub(r"（[^）]{0,80}）", "", value)
+    value = re.sub(r"\([^)]{0,80}\)", "", value)
+    value = value.replace("\r", " ").replace("\n", "。")
+    value = re.sub(r"[*#_`~]+", "", value)
+    value = re.sub(r"\s+", " ", value)
+    value = re.sub(r"[。]{2,}", "。", value)
+    return value.strip(" ，。；;") or "我在这里陪着你，慢一点，别着急。"
+
+
+def synthesize_speech_locally(
+    *,
+    conn: sqlite3.Connection,
+    user_id: str,
+    loved_one_id: str,
+    text: str,
+) -> Optional[dict]:
+    say_bin = shutil.which("say")
+    if not say_bin or not text:
+        return None
+
+    voice_name = pick_local_tts_voice(conn, loved_one_id)
+    speakable_text = sanitize_local_tts_text(text)
+    wav_path = safe_upload_path("generated_audio", loved_one_id, "reply.wav")
+    try:
+        subprocess.run(
+            [
+                say_bin,
+                "-v",
+                voice_name,
+                "-r",
+                "165",
+                "-o",
+                str(wav_path),
+                "--file-format=WAVE",
+                "--data-format=LEI16@24000",
+                speakable_text,
+            ],
+            check=True,
+            capture_output=True,
+        )
+        result = persist_generated_media_asset(
+            conn,
+            user_id=user_id,
+            loved_one_id=loved_one_id,
+            kind="generated_audio",
+            file_path=wav_path,
+            mime_type="audio/wav",
+            summary="本地 TTS 生成的陪伴语音回复",
+            metadata={
+                "engine": "local_say",
+                "voice": voice_name,
+            },
+        )
+        result["engine"] = "local_say"
+        return result
+    except Exception:
+        logger.warning("Local speech synthesis failed", exc_info=True)
+        cleanup_path(str(wav_path))
+        return None
+
+
 async def synthesize_speech_with_mimo(
     *,
     conn: sqlite3.Connection,
@@ -3100,8 +3575,15 @@ async def synthesize_speech_with_mimo(
     text: str,
     emotion: Optional[str],
 ) -> Optional[dict]:
-    if not MIMO_API_KEY or not text:
+    if not text:
         return None
+    if not MIMO_API_KEY or is_deepseek_provider():
+        return synthesize_speech_locally(
+            conn=conn,
+            user_id=user_id,
+            loved_one_id=loved_one_id,
+            text=text,
+        )
 
     style_tags = ["温柔", "克制", "慢一点"]
     if emotion in {"sad", "missing"}:
@@ -3110,7 +3592,7 @@ async def synthesize_speech_with_mimo(
         style_tags.extend(["温暖", "轻一点笑意"])
 
     payload = {
-        "model": "mimo-v2-tts",
+        "model": choose_chat_model(prefer_multimodal=False),
         "messages": [
             {"role": "user", "content": "请用适合纪念陪伴场景的口吻读出这段话。"},
             {"role": "assistant", "content": f"<style>{' '.join(style_tags)}</style>{text}"},
@@ -3126,10 +3608,15 @@ async def synthesize_speech_with_mimo(
         result = await call_mimo_chat_completion(payload, timeout=90.0)
         audio_data = result["choices"][0]["message"]["audio"]["data"]
         if not audio_data:
-            return None
+            return synthesize_speech_locally(
+                conn=conn,
+                user_id=user_id,
+                loved_one_id=loved_one_id,
+                text=text,
+            )
         output_path = safe_upload_path("generated_audio", loved_one_id, "reply.wav")
         output_path.write_bytes(base64.b64decode(audio_data))
-        return persist_generated_media_asset(
+        persisted = persist_generated_media_asset(
             conn,
             user_id=user_id,
             loved_one_id=loved_one_id,
@@ -3143,9 +3630,16 @@ async def synthesize_speech_with_mimo(
                 "voice": MIMO_TTS_VOICE,
             },
         )
+        persisted["engine"] = "mimo"
+        return persisted
     except Exception:
-        logger.warning("MIMO TTS synthesis failed", exc_info=True)
-        return None
+        logger.warning("Remote audio synthesis failed", exc_info=True)
+        return synthesize_speech_locally(
+            conn=conn,
+            user_id=user_id,
+            loved_one_id=loved_one_id,
+            text=text,
+        )
 
 
 def strip_code_fence(value: str) -> str:
@@ -3155,6 +3649,336 @@ def strip_code_fence(value: str) -> str:
         if len(lines) >= 3:
             text = "\n".join(lines[1:-1]).strip()
     return text
+
+
+def is_comfyui_enabled() -> bool:
+    return bool(COMFYUI_API_BASE and COMFYUI_CHECKPOINT)
+
+
+async def comfyui_healthcheck() -> dict:
+    if not is_comfyui_enabled():
+        return {
+            "status": "not_configured",
+            "base_url": COMFYUI_API_BASE or None,
+            "checkpoint": COMFYUI_CHECKPOINT or None,
+        }
+
+    started = _time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{COMFYUI_API_BASE}/system_stats")
+            response.raise_for_status()
+            payload = response.json()
+        devices = payload.get("devices") or []
+        return {
+            "status": "ok",
+            "latency_ms": round((_time.monotonic() - started) * 1000),
+            "checkpoint": COMFYUI_CHECKPOINT,
+            "devices": len(devices),
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "checkpoint": COMFYUI_CHECKPOINT,
+            "detail": str(exc),
+            "latency_ms": round((_time.monotonic() - started) * 1000),
+        }
+
+
+def build_comfyui_visual_prompt(loved_one: dict, plan: dict) -> str:
+    digital_human = loved_one.get("digital_human_model") or {}
+    visual_profile = digital_human.get("visual_profile") or {}
+    appearance_traits = unique_preserve_order(
+        [str(item).strip() for item in (visual_profile.get("appearance_traits") or []) if str(item).strip()]
+    )[:6]
+    memory_hint = ""
+    memories = loved_one.get("memories") or []
+    if memories:
+        memory_hint = str(memories[-1]).strip()[:48]
+
+    prompt_parts = [
+        "photorealistic memorial portrait",
+        "cinematic family remembrance scene",
+        f"beloved {loved_one.get('relationship') or 'family member'}",
+        loved_one.get("name") or "loved one",
+        plan.get("visual_style") or "warm, calm, intimate",
+        "gentle ocean breeze",
+        "soft sunset sky",
+        "birds in the distance",
+        "falling leaves",
+        "subtle transition of four seasons",
+        "warm golden light",
+        "quiet homecoming mood",
+        "natural skin texture",
+        "authentic facial details",
+    ]
+    if appearance_traits:
+        prompt_parts.append(", ".join(appearance_traits))
+    cover_title = (loved_one.get("cover_title") or "").strip()
+    if cover_title:
+        prompt_parts.append(f"emotional title mood: {cover_title}")
+    if memory_hint:
+        prompt_parts.append(f"memory anchor: {memory_hint}")
+    return ", ".join(part for part in prompt_parts if part)
+
+
+def extract_video_frame_for_comfy(loved_one_id: str, source_path: Path) -> Optional[Path]:
+    if not FFMPEG_BIN or not source_path.exists():
+        return None
+    frame_path = safe_upload_path("generated_video", loved_one_id, "comfy-source-frame.png")
+    command = [
+        FFMPEG_BIN,
+        "-y",
+        "-ss",
+        "00:00:01.000",
+        "-i",
+        str(source_path),
+        "-frames:v",
+        "1",
+        str(frame_path),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True)
+        if frame_path.exists():
+            return frame_path
+    except Exception:
+        logger.warning("Failed to extract frame for ComfyUI", exc_info=True)
+    cleanup_path(str(frame_path))
+    return None
+
+
+async def upload_image_to_comfyui(path: Path) -> Optional[str]:
+    if not path.exists():
+        return None
+    mime_type = infer_mime_type(path, "image/png")
+    try:
+        async with httpx.AsyncClient(timeout=COMFYUI_TIMEOUT_SECONDS) as client:
+            with path.open("rb") as handle:
+                response = await client.post(
+                    f"{COMFYUI_API_BASE}/upload/image",
+                    data={"type": "input", "overwrite": "true"},
+                    files={"image": (path.name, handle, mime_type)},
+                )
+            response.raise_for_status()
+            payload = response.json()
+        filename = payload.get("name") or path.name
+        subfolder = (payload.get("subfolder") or "").strip().strip("/")
+        return f"{subfolder}/{filename}" if subfolder else filename
+    except Exception:
+        logger.warning("Failed to upload image to ComfyUI", exc_info=True)
+        return None
+
+
+def build_comfyui_memorial_workflow(
+    *,
+    prompt: str,
+    uploaded_image_name: Optional[str],
+    filename_prefix: str,
+) -> tuple[dict, str]:
+    checkpoint_node = "1"
+    positive_node = "2"
+    negative_node = "3"
+    if uploaded_image_name:
+        load_image_node = "4"
+        scale_image_node = "5"
+        latent_source_node = "6"
+        sampler_node = "7"
+        decode_node = "8"
+        save_node = "9"
+        workflow = {
+            checkpoint_node: {
+                "class_type": "CheckpointLoaderSimple",
+                "inputs": {"ckpt_name": COMFYUI_CHECKPOINT},
+            },
+            positive_node: {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": prompt, "clip": [checkpoint_node, 1]},
+            },
+            negative_node: {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": COMFYUI_NEGATIVE_PROMPT, "clip": [checkpoint_node, 1]},
+            },
+            load_image_node: {
+                "class_type": "LoadImage",
+                "inputs": {"image": uploaded_image_name},
+            },
+            scale_image_node: {
+                "class_type": "ImageScale",
+                "inputs": {
+                    "image": [load_image_node, 0],
+                    "upscale_method": "lanczos",
+                    "width": COMFYUI_IMAGE_WIDTH,
+                    "height": COMFYUI_IMAGE_HEIGHT,
+                    "crop": "center",
+                },
+            },
+            latent_source_node: {
+                "class_type": "VAEEncode",
+                "inputs": {"pixels": [scale_image_node, 0], "vae": [checkpoint_node, 2]},
+            },
+            sampler_node: {
+                "class_type": "KSampler",
+                "inputs": {
+                    "model": [checkpoint_node, 0],
+                    "seed": secrets.randbits(48),
+                    "steps": COMFYUI_STEPS,
+                    "cfg": COMFYUI_CFG,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "positive": [positive_node, 0],
+                    "negative": [negative_node, 0],
+                    "latent_image": [latent_source_node, 0],
+                    "denoise": COMFYUI_DENOISE,
+                },
+            },
+            decode_node: {
+                "class_type": "VAEDecode",
+                "inputs": {"samples": [sampler_node, 0], "vae": [checkpoint_node, 2]},
+            },
+            save_node: {
+                "class_type": "SaveImage",
+                "inputs": {"images": [decode_node, 0], "filename_prefix": filename_prefix},
+            },
+        }
+        return workflow, save_node
+
+    latent_node = "4"
+    sampler_node = "5"
+    decode_node = "6"
+    save_node = "7"
+    workflow = {
+        checkpoint_node: {
+            "class_type": "CheckpointLoaderSimple",
+            "inputs": {"ckpt_name": COMFYUI_CHECKPOINT},
+        },
+        positive_node: {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": prompt, "clip": [checkpoint_node, 1]},
+        },
+        negative_node: {
+            "class_type": "CLIPTextEncode",
+            "inputs": {"text": COMFYUI_NEGATIVE_PROMPT, "clip": [checkpoint_node, 1]},
+        },
+        latent_node: {
+            "class_type": "EmptyLatentImage",
+            "inputs": {"width": COMFYUI_IMAGE_WIDTH, "height": COMFYUI_IMAGE_HEIGHT, "batch_size": 1},
+        },
+        sampler_node: {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": [checkpoint_node, 0],
+                "seed": secrets.randbits(48),
+                "steps": COMFYUI_STEPS,
+                "cfg": COMFYUI_CFG,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "positive": [positive_node, 0],
+                "negative": [negative_node, 0],
+                "latent_image": [latent_node, 0],
+                "denoise": 1.0,
+            },
+        },
+        decode_node: {
+            "class_type": "VAEDecode",
+            "inputs": {"samples": [sampler_node, 0], "vae": [checkpoint_node, 2]},
+        },
+        save_node: {
+            "class_type": "SaveImage",
+            "inputs": {"images": [decode_node, 0], "filename_prefix": filename_prefix},
+        },
+    }
+    return workflow, save_node
+
+
+async def render_memorial_visual_with_comfyui(
+    *,
+    loved_one: dict,
+    loved_one_id: str,
+    plan: dict,
+    source: dict,
+) -> Optional[dict]:
+    if not is_comfyui_enabled():
+        return None
+
+    prompt = build_comfyui_visual_prompt(loved_one, plan)
+    temp_paths: List[Path] = []
+    uploaded_image_name = None
+
+    try:
+        source_path = source.get("path")
+        source_kind = source.get("kind")
+        if source_kind == "video" and source_path:
+            extracted_frame = extract_video_frame_for_comfy(loved_one_id, source_path)
+            if extracted_frame:
+                temp_paths.append(extracted_frame)
+                uploaded_image_name = await upload_image_to_comfyui(extracted_frame)
+        elif source_kind == "photo" and source_path and source_path.exists():
+            uploaded_image_name = await upload_image_to_comfyui(source_path)
+
+        prompt_prefix = f"eterna/{loved_one_id}/{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        workflow, save_node = build_comfyui_memorial_workflow(
+            prompt=prompt,
+            uploaded_image_name=uploaded_image_name,
+            filename_prefix=prompt_prefix,
+        )
+
+        async with httpx.AsyncClient(timeout=COMFYUI_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{COMFYUI_API_BASE}/prompt",
+                json={"prompt": workflow, "client_id": f"eterna-{uuid.uuid4()}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            prompt_id = payload.get("prompt_id")
+            if not prompt_id:
+                return None
+
+            deadline = _time.monotonic() + COMFYUI_TIMEOUT_SECONDS
+            history_payload = None
+            while _time.monotonic() < deadline:
+                history_response = await client.get(f"{COMFYUI_API_BASE}/history/{prompt_id}")
+                history_response.raise_for_status()
+                history_payload = history_response.json()
+                job = history_payload.get(prompt_id) if isinstance(history_payload, dict) else None
+                outputs = (job or {}).get("outputs") or {}
+                if outputs.get(save_node):
+                    break
+                await asyncio.sleep(COMFYUI_POLL_INTERVAL)
+            else:
+                logger.warning("ComfyUI render timed out for loved_one_id=%s", loved_one_id)
+                return None
+
+            outputs = ((history_payload or {}).get(prompt_id) or {}).get("outputs") or {}
+            image_items = (outputs.get(save_node) or {}).get("images") or []
+            if not image_items:
+                return None
+            first_image = image_items[0]
+            image_response = await client.get(
+                f"{COMFYUI_API_BASE}/view",
+                params={
+                    "filename": first_image.get("filename"),
+                    "subfolder": first_image.get("subfolder", ""),
+                    "type": first_image.get("type", "output"),
+                },
+            )
+            image_response.raise_for_status()
+
+        output_path = safe_upload_path("generated_video", loved_one_id, "comfy-visual.png")
+        output_path.write_bytes(image_response.content)
+        return {
+            "path": output_path,
+            "kind": "photo",
+            "engine": "comfyui",
+            "prompt": prompt,
+            "source_kind": source_kind,
+            "source_filename": source_path.name if source_path else None,
+        }
+    except Exception:
+        logger.warning("ComfyUI memorial visual rendering failed", exc_info=True)
+        return None
+    finally:
+        for temp_path in temp_paths:
+            cleanup_path(str(temp_path))
 
 
 async def generate_video_plan_with_mimo(
@@ -3180,7 +4004,7 @@ async def generate_video_plan_with_mimo(
     )
 
     payload = {
-        "model": MIMO_VIDEO_MODEL if media_parts else "mimo-v2-pro",
+        "model": choose_chat_model(prefer_multimodal=bool(media_parts)),
         "messages": [
             {
                 "role": "user",
@@ -3201,6 +4025,7 @@ async def generate_video_plan_with_mimo(
         "closing_caption": "念念不忘，轻声相见",
         "visual_style": "暖色、安静、像回到熟悉的家里",
         "preferred_source_kind": default_kind,
+        "plan_engine": "fallback",
     }
 
     try:
@@ -3209,7 +4034,8 @@ async def generate_video_plan_with_mimo(
         parsed = json.loads(raw)
         if not isinstance(parsed, dict):
             return fallback
-        plan = {**fallback, **parsed}
+        plan = {**fallback, **parsed, "plan_engine": "mimo"}
+        plan["plan_engine"] = current_llm_provider_name()
         if plan["preferred_source_kind"] not in {"video", "photo"}:
             plan["preferred_source_kind"] = default_kind
         return plan
@@ -3371,15 +4197,27 @@ async def synthesize_video_with_mimo(
         request=request,
     )
     source = choose_video_generation_source(loved_one, plan)
+    rendered_visual = await render_memorial_visual_with_comfyui(
+        loved_one=loved_one,
+        loved_one_id=loved_one_id,
+        plan=plan,
+        source=source,
+    )
+    composed_source = rendered_visual or source
     output_path = compose_memorial_video(
         loved_one_id=loved_one_id,
         audio_path=audio_path,
-        source_kind=source["kind"],
-        source_path=source["path"],
+        source_kind=composed_source["kind"],
+        source_path=composed_source["path"],
     )
     if output_path is None:
+        if rendered_visual and rendered_visual.get("path"):
+            cleanup_path(str(rendered_visual["path"]))
         return None
 
+    visual_engine = rendered_visual.get("engine") if rendered_visual else "raw_media"
+    audio_engine = audio_result.get("engine") if audio_result else None
+    plan_engine = plan.get("plan_engine", "fallback")
     result = persist_generated_media_asset(
         conn,
         user_id=user_id,
@@ -3387,17 +4225,34 @@ async def synthesize_video_with_mimo(
         kind="generated_video",
         file_path=output_path,
         mime_type="video/mp4",
-        summary="MIMO 驱动生成的视频陪伴回复",
+        summary=f"{current_llm_provider_name().upper()} 文本规划驱动生成的视频陪伴回复",
         metadata={
-            "engine": "mimo",
-            "model": MIMO_VIDEO_MODEL,
+            "engine": current_llm_provider_name(),
+            "model": choose_chat_model(prefer_multimodal=False),
             "audio_asset_id": audio_result.get("asset_id"),
-            "source_kind": source["kind"],
-            "source_filename": source["path"].name if source["path"] else None,
+            "audio_engine": audio_engine,
+            "source_kind": composed_source["kind"],
+            "source_filename": composed_source["path"].name if composed_source["path"] else None,
+            "visual_engine": visual_engine,
+            "visual_prompt": rendered_visual.get("prompt") if rendered_visual else None,
+            "visual_source_kind": rendered_visual.get("source_kind") if rendered_visual else source["kind"],
+            "visual_source_filename": rendered_visual.get("source_filename") if rendered_visual else (source["path"].name if source["path"] else None),
+            "plan_engine": plan_engine,
             "plan": plan,
         },
     )
-    result["mode_note"] = "当前视频陪伴由 MIMO 生成旁白和镜头计划，并自动合成为一段纪念短视频。"
+    if rendered_visual and audio_engine == "local_say" and plan_engine == "deepseek":
+        result["mode_note"] = "当前视频陪伴已由 DeepSeek 生成文案与镜头规划，再用本地语音兜底和 ComfyUI 纪念画面完成合成。"
+    elif rendered_visual and audio_engine == "mimo" and plan_engine == "mimo":
+        result["mode_note"] = "当前视频陪伴由 MIMO 生成旁白和镜头计划，再由 ComfyUI 生成纪念画面并自动合成为一段配音视频。"
+    elif rendered_visual and audio_engine == "local_say":
+        result["mode_note"] = "当前视频陪伴已使用本地语音兜底和 ComfyUI 纪念画面完成合成；待远程语音能力恢复后会切回正式生成链路。"
+    elif rendered_visual:
+        result["mode_note"] = "当前视频陪伴已由 ComfyUI 生成纪念画面，并自动合成为一段配音视频。"
+    else:
+        result["mode_note"] = "当前视频陪伴已自动合成为一段纪念短视频。"
+    if rendered_visual and rendered_visual.get("path"):
+        cleanup_path(str(rendered_visual["path"]))
     return result
 
 
@@ -3726,7 +4581,7 @@ async def generate_proactive_message_with_mimo(
     )
 
     payload = {
-        "model": "mimo-v2-omni" if loved_one.get("identity_model_summary") else "mimo-v2-pro",
+        "model": choose_chat_model(prefer_multimodal=bool(loved_one.get("identity_model_summary"))),
         "messages": [{"role": "user", "content": instruction}],
         "temperature": 0.85,
         "max_completion_tokens": 220,
@@ -4101,10 +4956,10 @@ async def generate_proactive_payload(
         if video_result is None:
             if audio_result:
                 actual_message_mode = "voice"
-                synthesis_fallback_reason = "MIMO 视频短片合成暂时失败，已自动回退为语音消息。"
+                synthesis_fallback_reason = "MIMO + ComfyUI 视频合成暂时失败，已自动回退为语音消息。"
             else:
                 actual_message_mode = "text"
-                synthesis_fallback_reason = "MIMO 视频短片暂时未生成成功，已自动回退为文字消息。"
+                synthesis_fallback_reason = "MIMO + ComfyUI 视频暂时未生成成功，已自动回退为文字消息。"
 
     if actual_message_mode == "voice" and not audio_result and not can_phone:
         actual_message_mode = "text"
@@ -4464,6 +5319,10 @@ async def health():
         "status": "healthy",
         "service": "念念",
         "version": "2.0.0",
+        "mimo_configured": bool(MIMO_API_KEY),
+        "comfyui_configured": is_comfyui_enabled(),
+        "ffmpeg_configured": bool(FFMPEG_BIN),
+        "video_pipeline_ready": bool(MIMO_API_KEY and FFMPEG_BIN and is_comfyui_enabled()),
         "timestamp": now_iso(),
     }
 
@@ -4499,8 +5358,15 @@ async def health_ready():
     # MIMO API check
     checks["mimo"] = {
         "status": "configured" if MIMO_API_KEY else "not_configured",
-        "model": MIMO_VIDEO_MODEL,
+        "provider": current_llm_provider_name(),
+        "model": choose_chat_model(prefer_multimodal=False),
+        "base_url": MIMO_API_BASE,
     }
+
+    comfy_status = await comfyui_healthcheck()
+    checks["comfyui"] = comfy_status
+    if comfy_status["status"] == "error":
+        overall = "degraded"
 
     # Stripe check
     checks["stripe"] = {
@@ -4517,6 +5383,11 @@ async def health_ready():
     checks["call_bridge"] = {
         "status": "configured" if bridge["configured"] else "not_configured",
         "provider": bridge["provider"],
+    }
+
+    checks["video_pipeline"] = {
+        "status": "ready" if (MIMO_API_KEY and FFMPEG_BIN and comfy_status["status"] == "ok") else "degraded",
+        "uses": ["mimo", "comfyui", "ffmpeg"],
     }
 
     return {
@@ -4546,6 +5417,13 @@ async def list_plans(authorization: Optional[str] = Header(default=None)):
         "current_plan_code": current_subscription["plan_code"] if current_subscription else None,
         "stripe_configured": bool(STRIPE_SECRET_KEY),
     }
+
+
+@app.get("/api/miniprogram/config")
+async def get_miniprogram_config():
+    config = build_miniprogram_config()
+    config["server_time"] = now_iso()
+    return config
 
 
 @app.post("/api/auth/register", response_model=AuthEnvelope)
@@ -4637,6 +5515,68 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         subscription=SubscriptionSnapshot(**subscription),
         stats=stats,
     )
+
+
+@app.get("/api/client/bootstrap")
+async def get_client_bootstrap(current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        user_row = conn.execute("SELECT * FROM users WHERE id = ?", (current_user["id"],)).fetchone()
+        subscription = get_subscription_snapshot(conn, current_user["id"])
+        stats = get_user_stats(conn, current_user["id"])
+        plan_rows = conn.execute("SELECT * FROM plans WHERE code != 'trial' ORDER BY price_cny").fetchall()
+        loved_one_rows = conn.execute(
+            "SELECT * FROM loved_ones WHERE user_id = ? ORDER BY updated_at DESC",
+            (current_user["id"],),
+        ).fetchall()
+        proactive_feed = conn.execute(
+            """
+            SELECT * FROM proactive_events
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 6
+            """,
+            (current_user["id"],),
+        ).fetchall()
+        unread_proactive_count = conn.execute(
+            "SELECT COUNT(*) FROM proactive_events WHERE user_id = ? AND consumed_at IS NULL",
+            (current_user["id"],),
+        ).fetchone()[0]
+        recent_memories = conn.execute(
+            """
+            SELECT COUNT(*) FROM memories
+            WHERE user_id = ? AND created_at >= datetime('now', '-30 day')
+            """,
+            (current_user["id"],),
+        ).fetchone()[0]
+
+        loved_ones = [
+            serialize_loved_one_client_summary(conn, row, subscription=subscription)
+            for row in loved_one_rows
+        ]
+        return {
+            "app": {
+                "name": "念念 Eterna",
+                "tagline": "念念不忘，ta一直在",
+                "version": str(app.version),
+            },
+            "user": serialize_user(user_row),
+            "subscription": subscription,
+            "stats": {
+                **stats,
+                "recent_memories_30d": recent_memories,
+                "unread_proactive_count": unread_proactive_count,
+            },
+            "plans": [build_plan_view(dict(row)) for row in plan_rows],
+            "loved_ones": loved_ones,
+            "recent_proactive_events": [serialize_proactive_event(conn, row) for row in proactive_feed],
+            "feature_flags": build_service_capabilities(subscription),
+            "bridge": {
+                "provider": get_call_bridge_provider(),
+                "configured": get_call_bridge_provider() != "none",
+            },
+            "miniprogram": build_miniprogram_config(),
+            "server_time": now_iso(),
+        }
 
 
 @app.get("/api/admin/overview")
@@ -5805,6 +6745,28 @@ async def get_media_assets(
         return [serialize_media_asset(row) for row in rows]
 
 
+@app.get("/api/loved-ones/{loved_one_id}/timeline")
+async def get_loved_one_timeline(
+    loved_one_id: str,
+    limit: int = 60,
+    current_user: dict = Depends(get_current_user),
+):
+    with get_db() as conn:
+        loved_one_row = ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        items = build_loved_one_timeline(
+            conn,
+            user_id=current_user["id"],
+            loved_one_id=loved_one_id,
+            limit=limit,
+        )
+    return {
+        "loved_one_id": loved_one_id,
+        "loved_one_name": loved_one_row["name"],
+        "count": len(items),
+        "items": items,
+    }
+
+
 @app.post("/api/media/{asset_id}/tags")
 async def update_media_tags(
     asset_id: str,
@@ -6032,9 +6994,9 @@ async def chat_with_loved_one(
                     mode=interaction_mode,
                     intensity=msg.intensity or int(emotion_intensity * 5),  # 使用情感强度
                 )
-                logger.info("使用MIMO API生成回应成功")
+                logger.info("使用 %s 生成回应成功", current_llm_provider_name().upper())
             except Exception as e:
-                logger.warning("MIMO API调用失败，使用回退回应: %s", e)
+                logger.warning("远程 LLM 调用失败，使用回退回应: %s", e)
                 ai_response = build_fallback_response(
                     loved_one=loved_one,
                     user_message=msg.message,
@@ -6043,7 +7005,7 @@ async def chat_with_loved_one(
                     intensity=msg.intensity or int(emotion_intensity * 5),
                 )
         else:
-            logger.info("MIMO API未配置，使用回退回应")
+            logger.info("远程 LLM 未配置，使用回退回应")
             ai_response = build_fallback_response(
                 loved_one=loved_one,
                 user_message=msg.message,
@@ -6099,7 +7061,7 @@ async def chat_with_loved_one(
                     (msg.loved_one_id,),
                 ).fetchone()
                 response_video_asset_id = video_row["id"] if video_row else None
-                video_mode_note = "MIMO 旁白生成已完成；当前视频画面先回退到你上传的原始影像素材。"
+                video_mode_note = "MIMO 旁白已生成；ComfyUI 纪念画面暂时失败，当前先回退到你上传的原始影像素材。"
 
         conn.execute(
             """

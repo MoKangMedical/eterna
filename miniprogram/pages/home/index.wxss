@@ -1,0 +1,74 @@
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.stat-item {
+  background: #fff8ef;
+  border-radius: 22rpx;
+  padding: 24rpx;
+}
+
+.stat-value {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #6b4a31;
+}
+
+.loved-card {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 24rpx;
+  padding: 20rpx;
+  border-radius: 24rpx;
+  background: #fff8f0;
+}
+
+.cover-photo {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 20rpx;
+  flex-shrink: 0;
+}
+
+.loved-card-main {
+  flex: 1;
+}
+
+.loved-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.loved-name {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #5a3c28;
+}
+
+.loved-summary {
+  margin-top: 16rpx;
+  font-size: 25rpx;
+  line-height: 1.7;
+  color: #7c624c;
+}
+
+.loved-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.loved-actions {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 20rpx;
+}
+
+.action-button {
+  flex: 1;
+}

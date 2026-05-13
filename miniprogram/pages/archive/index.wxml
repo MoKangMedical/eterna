@@ -1,0 +1,79 @@
+<view class="page-shell">
+  <view class="hero-card">
+    <view class="page-title">纪念册工作台</view>
+    <view class="page-subtitle">用上传、回忆与时间线，把亲人的数字分身慢慢补完整。</view>
+  </view>
+
+  <view wx:if="{{lovedOnes.length}}" class="section-card">
+    <view class="section-title">当前档案</view>
+    <picker range="{{lovedOnes}}" range-key="name" value="{{pickerIndex}}" bindchange="handleLovedOneChange">
+      <view class="picker-shell">
+        <text>{{lovedOnes[pickerIndex].name}} · {{lovedOnes[pickerIndex].relationship}}</text>
+        <text class="muted-text">切换</text>
+      </view>
+    </picker>
+  </view>
+
+  <view wx:if="{{!lovedOnes.length}}" class="section-card">
+    <view class="empty-state">当前没有可用档案，请先在网页端创建第一位亲人。</view>
+  </view>
+
+  <view wx:if="{{lovedOneId}}" class="section-card">
+    <view class="section-title">上传多模态素材</view>
+    <view class="section-tip">支持照片、语音、视频和 3D 重建源文件，都会进入统一时间线。</view>
+    <view class="upload-grid">
+      <button class="ghost-button" loading="{{uploadBusy}}" data-kind="photo" bindtap="chooseAndUpload">上传照片</button>
+      <button class="ghost-button" loading="{{uploadBusy}}" data-kind="voice" bindtap="chooseAndUpload">上传语音</button>
+      <button class="ghost-button" loading="{{uploadBusy}}" data-kind="video" bindtap="chooseAndUpload">上传视频</button>
+      <button class="ghost-button" loading="{{uploadBusy}}" data-kind="model3d" bindtap="chooseAndUpload">上传 3D</button>
+    </view>
+  </view>
+
+  <view wx:if="{{lovedOneId}}" class="section-card">
+    <view class="section-title">补充一段回忆</view>
+    <textarea
+      class="text-area"
+      placeholder="写下你们的一段经历、TA 的习惯，或你最想听到的一句话。"
+      value="{{memoryDraft}}"
+      bindinput="updateMemoryDraft"
+    />
+    <button class="warm-button" style="margin-top: 20rpx;" bindtap="saveMemory">保存到纪念册</button>
+  </view>
+
+  <view class="section-card">
+    <view class="section-title">{{lovedOneName || '纪念册时间线'}}</view>
+    <view class="section-tip">回忆、素材、对话、主动联系和模型重建都会统一沉淀在这里。</view>
+
+    <view wx:if="{{!timelineItems.length}}" class="empty-state">还没有可展示的时间线内容。</view>
+
+    <view wx:for="{{timelineItems}}" wx:key="id" class="timeline-item">
+      <view class="timeline-head">
+        <view class="soft-tag">{{item.badge}}</view>
+        <view class="muted-text">{{item.displayTime}}</view>
+      </view>
+      <view class="timeline-title">{{item.title}}</view>
+      <view class="timeline-summary">{{item.summary}}</view>
+
+      <image
+        wx:if="{{item.item_type === 'media' && item.subtype === 'photo'}}"
+        class="timeline-photo"
+        mode="aspectFill"
+        src="{{item.media_url}}"
+      />
+
+      <video
+        wx:if="{{item.video_url}}"
+        class="timeline-video"
+        src="{{item.video_url}}"
+        controls="{{true}}"
+      />
+
+      <audio
+        wx:if="{{item.audio_url}}"
+        class="timeline-audio"
+        src="{{item.audio_url}}"
+        controls="{{true}}"
+      />
+    </view>
+  </view>
+</view>
