@@ -10,12 +10,14 @@
 - 回忆保存：复用 `/api/memories`
 - 素材上传：复用 `/api/loved-ones/{id}/voice|photo|video|model-3d`
 - 对话陪伴：复用 `/api/chat` 与 `/api/chat-history/{id}`
+- 声音模型：后端已提供 `/api/loved-ones/{id}/voice-clone/*`，小程序可在后续页面中接入
 
 ## 当前未做
 
 - 微信 `code2Session` 登录
 - 订阅消息推送
 - 微信支付 / 正式支付链路
+- 小程序端声音模型创建与试听 UI
 - 审核版隐私协议页与用户协议页
 
 ## 本地打开方式

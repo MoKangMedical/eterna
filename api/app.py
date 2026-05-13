@@ -256,6 +256,8 @@ MIMO_API_KEY = runtime_config("MIMO_API_KEY", "")
 MIMO_CHAT_MODEL = runtime_config("MIMO_CHAT_MODEL", "mimo-v2-pro")
 MIMO_OMNI_MODEL = runtime_config("MIMO_OMNI_MODEL", "mimo-v2-omni")
 MIMO_TTS_VOICE = runtime_config("MIMO_TTS_VOICE", "default_zh")
+ELEVENLABS_API_KEY = runtime_config("ELEVENLABS_API_KEY", "")
+ELEVENLABS_VOICE_MODEL = runtime_config("ELEVENLABS_VOICE_MODEL", "eleven_multilingual_v2")
 COMFYUI_API_BASE = runtime_config("COMFYUI_API_BASE", runtime_config("COMFYUI_BASE_URL", "http://127.0.0.1:8188")).rstrip("/")
 COMFYUI_CHECKPOINT = runtime_config("COMFYUI_CHECKPOINT", "DreamShaper_8_pruned.safetensors")
 COMFYUI_NEGATIVE_PROMPT = runtime_config(
@@ -328,6 +330,7 @@ def provider_supports_multimodal() -> bool:
 logger.info("念念 Eterna v%s starting", "2.0.0")
 logger.info("  Database: %s", DB_PATH)
 logger.info("  MIMO API: %s", "configured" if MIMO_API_KEY else "not configured")
+logger.info("  ElevenLabs: %s", "configured" if ELEVENLABS_API_KEY else "not configured")
 logger.info("  ComfyUI: %s", COMFYUI_API_BASE or "not configured")
 logger.info("  Stripe: %s", "configured" if STRIPE_SECRET_KEY else "not configured")
 logger.info("  FFmpeg: %s", "configured" if FFMPEG_BIN else "not configured")
@@ -493,6 +496,20 @@ class MediaTagsPayload(BaseModel):
 
 class MediaStagePayload(BaseModel):
     stage: str
+
+
+class VoiceCloneCreatePayload(BaseModel):
+    name: Optional[str] = None
+    provider: str = "local"
+    sample_asset_ids: List[str] = Field(default_factory=list)
+
+
+class VoiceCloneSynthesizePayload(BaseModel):
+    text: str
+    voice_model_id: Optional[str] = None
+    stability: float = 0.5
+    similarity_boost: float = 0.75
+    style: float = 0.0
 
 
 class LovedOneCoverPayload(BaseModel):
@@ -1023,6 +1040,20 @@ def init_db():
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS voice_clone_models (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                loved_one_id TEXT NOT NULL REFERENCES loved_ones(id) ON DELETE CASCADE,
+                display_name TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                status TEXT NOT NULL,
+                provider_voice_id TEXT,
+                sample_asset_ids_json TEXT NOT NULL DEFAULT '[]',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS greetings (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1086,6 +1117,7 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_chat_loved_one_id ON chat_messages(loved_one_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_digital_human_fragments_loved_one_id ON digital_human_fragments(loved_one_id, weight DESC, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_digital_human_build_runs_loved_one_id ON digital_human_build_runs(loved_one_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_voice_clone_models_loved_one_id ON voice_clone_models(loved_one_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_proactive_flows_next_run ON proactive_flows(enabled, next_run_at);
             CREATE INDEX IF NOT EXISTS idx_proactive_events_user_created ON proactive_events(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
@@ -2897,6 +2929,8 @@ def build_service_capabilities(subscription: Optional[dict] = None) -> dict:
         "video_upload": bool(features.get("video_upload", True)),
         "model3d_upload": bool(features.get("video_upload", True)),
         "digital_human_console": True,
+        "voice_clone": True,
+        "voice_clone_provider": "elevenlabs" if ELEVENLABS_API_KEY else "local",
         "proactive_app": True,
         "proactive_phone": get_call_bridge_provider() != "none",
         "stripe_billing": bool(STRIPE_SECRET_KEY),
@@ -2957,6 +2991,17 @@ def serialize_loved_one_client_summary(
         "video": len(loved_one.get("video_urls") or []),
         "model3d": len(loved_one.get("model3d_urls") or []),
     }
+    voice_clone_row = conn.execute(
+        """
+        SELECT COUNT(*) AS total,
+               SUM(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) AS ready_count
+        FROM voice_clone_models
+        WHERE loved_one_id = ?
+        """,
+        (loved_one_row["id"],),
+    ).fetchone()
+    voice_clone_count = int((voice_clone_row or {})["total"] or 0) if voice_clone_row else 0
+    voice_clone_ready_count = int((voice_clone_row or {})["ready_count"] or 0) if voice_clone_row else 0
     return {
         "id": loved_one["id"],
         "name": loved_one["name"],
@@ -2972,6 +3017,9 @@ def serialize_loved_one_client_summary(
         "available_modes": twin.get("available_modes", ["text"]),
         "memory_count": len(loved_one.get("memories") or []),
         "media_counts": media_counts,
+        "voice_clone_count": voice_clone_count,
+        "voice_clone_ready_count": voice_clone_ready_count,
+        "voice_clone_status": "ready" if voice_clone_ready_count else "not_started" if voice_clone_count == 0 else "needs_attention",
         "digital_human_status": model.get("build_status") or "pending",
         "digital_human_version": int(model.get("build_version") or 1),
         "knowledge_count": int(model.get("knowledge_count") or 0),
@@ -3640,6 +3688,215 @@ async def synthesize_speech_with_mimo(
             loved_one_id=loved_one_id,
             text=text,
         )
+
+
+def normalize_voice_clone_provider(provider: str) -> str:
+    value = str(provider or "local").strip().lower()
+    if value in {"elevenlabs", "eleven_labs"}:
+        return "elevenlabs"
+    return "local"
+
+
+def serialize_voice_clone_model(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "loved_one_id": row["loved_one_id"],
+        "display_name": row["display_name"],
+        "provider": row["provider"],
+        "status": row["status"],
+        "provider_voice_id": row["provider_voice_id"],
+        "sample_asset_ids": [str(item) for item in json_list(row["sample_asset_ids_json"])],
+        "metadata": json_object(row["metadata_json"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def fetch_voice_clone_model(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    loved_one_id: str,
+    voice_model_id: Optional[str] = None,
+) -> Optional[sqlite3.Row]:
+    if voice_model_id:
+        return conn.execute(
+            """
+            SELECT * FROM voice_clone_models
+            WHERE id = ? AND user_id = ? AND loved_one_id = ?
+            """,
+            (voice_model_id, user_id, loved_one_id),
+        ).fetchone()
+    return conn.execute(
+        """
+        SELECT * FROM voice_clone_models
+        WHERE user_id = ? AND loved_one_id = ?
+        ORDER BY CASE WHEN status = 'ready' THEN 0 ELSE 1 END, updated_at DESC
+        LIMIT 1
+        """,
+        (user_id, loved_one_id),
+    ).fetchone()
+
+
+def fetch_voice_sample_rows(
+    conn: sqlite3.Connection,
+    *,
+    user_id: str,
+    loved_one_id: str,
+    sample_asset_ids: Optional[List[str]] = None,
+) -> List[sqlite3.Row]:
+    cleaned_ids = [str(item).strip() for item in (sample_asset_ids or []) if str(item).strip()]
+    if cleaned_ids:
+        placeholders = ",".join(["?"] * len(cleaned_ids))
+        rows = conn.execute(
+            f"""
+            SELECT * FROM media_assets
+            WHERE user_id = ? AND loved_one_id = ? AND kind = 'voice' AND id IN ({placeholders})
+            ORDER BY is_primary DESC, created_at DESC
+            """,
+            [user_id, loved_one_id, *cleaned_ids],
+        ).fetchall()
+        found_ids = {row["id"] for row in rows}
+        missing = [asset_id for asset_id in cleaned_ids if asset_id not in found_ids]
+        if missing:
+            raise HTTPException(status_code=404, detail=f"语音样本不存在：{', '.join(missing)}")
+        return rows
+
+    return conn.execute(
+        """
+        SELECT * FROM media_assets
+        WHERE user_id = ? AND loved_one_id = ? AND kind = 'voice'
+        ORDER BY is_primary DESC, created_at DESC
+        LIMIT 8
+        """,
+        (user_id, loved_one_id),
+    ).fetchall()
+
+
+async def create_elevenlabs_voice_clone(
+    *,
+    display_name: str,
+    sample_rows: List[sqlite3.Row],
+    loved_one_name: str,
+) -> tuple[str, Optional[str], dict]:
+    if not ELEVENLABS_API_KEY:
+        return (
+            "needs_provider_config",
+            None,
+            {"provider_note": "ELEVENLABS_API_KEY 未配置，已保存待训练任务。"},
+        )
+
+    files = []
+    for index, row in enumerate(sample_rows[:8]):
+        path = Path(row["file_path"])
+        if not path.exists():
+            continue
+        if path.stat().st_size > 20 * 1024 * 1024:
+            continue
+        files.append(
+            (
+                "files",
+                (
+                    row["original_filename"] or f"sample_{index}.wav",
+                    path.read_bytes(),
+                    row["mime_type"] or infer_mime_type(path, "audio/wav"),
+                ),
+            )
+        )
+
+    if not files:
+        return (
+            "failed",
+            None,
+            {"provider_note": "没有可用的语音样本文件，无法提交 ElevenLabs。"},
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                "https://api.elevenlabs.io/v1/voices/add",
+                headers={"xi-api-key": ELEVENLABS_API_KEY, "Accept": "application/json"},
+                data={
+                    "name": display_name,
+                    "description": f"念念 Eterna voice clone for {loved_one_name}",
+                },
+                files=files,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        provider_voice_id = payload.get("voice_id")
+        return ("ready" if provider_voice_id else "processing", provider_voice_id, payload)
+    except Exception as exc:
+        logger.warning("ElevenLabs voice clone creation failed", exc_info=True)
+        return (
+            "failed",
+            None,
+            {"provider_note": "ElevenLabs 语音克隆创建失败", "error": str(exc)},
+        )
+
+
+async def synthesize_with_elevenlabs_voice(
+    *,
+    conn: sqlite3.Connection,
+    user_id: str,
+    loved_one_id: str,
+    text: str,
+    model_row: sqlite3.Row,
+    stability: float,
+    similarity_boost: float,
+    style: float,
+) -> Optional[dict]:
+    provider_voice_id = model_row["provider_voice_id"]
+    if not ELEVENLABS_API_KEY or not provider_voice_id:
+        return None
+
+    payload = {
+        "text": sanitize_local_tts_text(text),
+        "model_id": ELEVENLABS_VOICE_MODEL,
+        "voice_settings": {
+            "stability": max(0.0, min(1.0, float(stability))),
+            "similarity_boost": max(0.0, min(1.0, float(similarity_boost))),
+            "style": max(0.0, min(1.0, float(style))),
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            response = await client.post(
+                f"https://api.elevenlabs.io/v1/text-to-speech/{provider_voice_id}",
+                headers={
+                    "xi-api-key": ELEVENLABS_API_KEY,
+                    "Accept": "audio/mpeg",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            response.raise_for_status()
+            audio_bytes = response.content
+        if not audio_bytes:
+            return None
+
+        output_path = safe_upload_path("generated_audio", loved_one_id, "voice-clone.mp3")
+        output_path.write_bytes(audio_bytes)
+        persisted = persist_generated_media_asset(
+            conn,
+            user_id=user_id,
+            loved_one_id=loved_one_id,
+            kind="generated_audio",
+            file_path=output_path,
+            mime_type="audio/mpeg",
+            summary="ElevenLabs 克隆声音生成的语音",
+            metadata={
+                "engine": "elevenlabs",
+                "voice_model_id": model_row["id"],
+                "provider_voice_id": provider_voice_id,
+                "model": ELEVENLABS_VOICE_MODEL,
+            },
+        )
+        persisted["engine"] = "elevenlabs"
+        return persisted
+    except Exception:
+        logger.warning("ElevenLabs synthesis failed", exc_info=True)
+        return None
 
 
 def strip_code_fence(value: str) -> str:
@@ -5389,6 +5646,13 @@ async def health_ready():
         "status": "ready" if (MIMO_API_KEY and FFMPEG_BIN and comfy_status["status"] == "ok") else "degraded",
         "uses": ["mimo", "comfyui", "ffmpeg"],
     }
+    checks["voice_clone"] = {
+        "status": "provider_configured" if ELEVENLABS_API_KEY else "local_ready",
+        "providers": {
+            "local": True,
+            "elevenlabs": bool(ELEVENLABS_API_KEY),
+        },
+    }
 
     return {
         "status": overall,
@@ -6536,6 +6800,191 @@ async def rebuild_digital_human_endpoint(loved_one_id: str, current_user: dict =
         ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
         model = rebuild_digital_human_model(conn, loved_one_id, trigger_source="manual_rebuild")
     return {"status": "rebuilt", "loved_one_id": loved_one_id, "digital_human_model": model}
+
+
+@app.get("/api/loved-ones/{loved_one_id}/voice-clone/models")
+async def list_voice_clone_models(loved_one_id: str, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        rows = conn.execute(
+            """
+            SELECT * FROM voice_clone_models
+            WHERE user_id = ? AND loved_one_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (current_user["id"], loved_one_id),
+        ).fetchall()
+    return {
+        "loved_one_id": loved_one_id,
+        "provider_configured": {
+            "local": True,
+            "elevenlabs": bool(ELEVENLABS_API_KEY),
+        },
+        "items": [serialize_voice_clone_model(row) for row in rows],
+    }
+
+
+@app.post("/api/loved-ones/{loved_one_id}/voice-clone/create")
+async def create_voice_clone_model(
+    loved_one_id: str,
+    payload: VoiceCloneCreatePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    provider = normalize_voice_clone_provider(payload.provider)
+    with get_db() as conn:
+        loved_one_row = ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        sample_rows = fetch_voice_sample_rows(
+            conn,
+            user_id=current_user["id"],
+            loved_one_id=loved_one_id,
+            sample_asset_ids=payload.sample_asset_ids,
+        )
+        if not sample_rows:
+            raise HTTPException(status_code=400, detail="请先上传至少一个亲人的语音样本")
+
+        display_name = (payload.name or f"{loved_one_row['name']} 的声音").strip()
+        sample_asset_ids = [row["id"] for row in sample_rows]
+        status = "ready"
+        provider_voice_id = None
+        metadata = {
+            "provider_note": "已创建本地声音画像，远程语音克隆服务可稍后接入。",
+            "sample_count": len(sample_asset_ids),
+        }
+        if provider == "elevenlabs":
+            status, provider_voice_id, metadata = await create_elevenlabs_voice_clone(
+                display_name=display_name,
+                sample_rows=sample_rows,
+                loved_one_name=loved_one_row["name"],
+            )
+
+        model_id = str(uuid.uuid4())
+        timestamp = now_iso()
+        conn.execute(
+            """
+            INSERT INTO voice_clone_models (
+                id, user_id, loved_one_id, display_name, provider, status, provider_voice_id,
+                sample_asset_ids_json, metadata_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                model_id,
+                current_user["id"],
+                loved_one_id,
+                display_name,
+                provider,
+                status,
+                provider_voice_id,
+                json.dumps(sample_asset_ids, ensure_ascii=False),
+                json.dumps(metadata or {}, ensure_ascii=False),
+                timestamp,
+                timestamp,
+            ),
+        )
+        row = conn.execute("SELECT * FROM voice_clone_models WHERE id = ?", (model_id,)).fetchone()
+        refresh_identity_model_summary(conn, loved_one_id, trigger_source="voice_clone")
+
+    return {
+        "status": status,
+        "model": serialize_voice_clone_model(row),
+        "message": "声音模型已创建" if status == "ready" else "声音模型任务已保存，请检查 provider 状态",
+    }
+
+
+@app.post("/api/loved-ones/{loved_one_id}/voice-clone/synthesize")
+async def synthesize_voice_clone_reply(
+    loved_one_id: str,
+    payload: VoiceCloneSynthesizePayload,
+    current_user: dict = Depends(get_current_user),
+):
+    text = sanitize_local_tts_text(payload.text)
+    if len(text) > 5000:
+        raise HTTPException(status_code=400, detail="合成文字不能超过 5000 字")
+
+    with get_db() as conn:
+        loved_one_row = ensure_loved_one_owner(conn, current_user["id"], loved_one_id)
+        model_row = fetch_voice_clone_model(
+            conn,
+            user_id=current_user["id"],
+            loved_one_id=loved_one_id,
+            voice_model_id=payload.voice_model_id,
+        )
+        if model_row is None:
+            raise HTTPException(status_code=404, detail="声音模型未找到，请先创建声音模型")
+
+        audio_result = None
+        fallback_reason = None
+        if model_row["provider"] == "elevenlabs" and model_row["status"] == "ready":
+            audio_result = await synthesize_with_elevenlabs_voice(
+                conn=conn,
+                user_id=current_user["id"],
+                loved_one_id=loved_one_id,
+                text=text,
+                model_row=model_row,
+                stability=payload.stability,
+                similarity_boost=payload.similarity_boost,
+                style=payload.style,
+            )
+            if audio_result is None:
+                fallback_reason = "ElevenLabs 合成失败，已回退到当前站内语音合成链路。"
+        else:
+            fallback_reason = "当前声音模型不是可直接合成的远程模型，已使用站内语音合成链路。"
+
+        if audio_result is None:
+            audio_result = await synthesize_speech_with_mimo(
+                conn=conn,
+                user_id=current_user["id"],
+                loved_one_id=loved_one_id,
+                text=text,
+                emotion=None,
+            )
+        if audio_result is None:
+            raise HTTPException(status_code=503, detail="语音合成服务当前不可用")
+
+        conn.execute(
+            """
+            INSERT INTO chat_messages (
+                id, user_id, loved_one_id, user_message, ai_response, emotion, mode,
+                response_audio_asset_id, response_video_asset_id, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                current_user["id"],
+                loved_one_id,
+                "voice_clone_synthesize",
+                text,
+                None,
+                "voice_clone",
+                audio_result.get("asset_id"),
+                None,
+                now_iso(),
+            ),
+        )
+
+    return {
+        "status": "synthesized",
+        "loved_one_id": loved_one_id,
+        "loved_one_name": loved_one_row["name"],
+        "voice_model": serialize_voice_clone_model(model_row),
+        "response_text": text,
+        "response_audio_url": audio_result.get("url"),
+        "response_audio_asset_id": audio_result.get("asset_id"),
+        "engine": audio_result.get("engine"),
+        "fallback_reason": fallback_reason,
+    }
+
+
+@app.delete("/api/voice-clone/models/{voice_model_id}")
+async def delete_voice_clone_model(voice_model_id: str, current_user: dict = Depends(get_current_user)):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM voice_clone_models WHERE id = ? AND user_id = ?",
+            (voice_model_id, current_user["id"]),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="声音模型未找到")
+        conn.execute("DELETE FROM voice_clone_models WHERE id = ?", (voice_model_id,))
+    return {"status": "deleted", "model": serialize_voice_clone_model(row)}
 
 
 @app.delete("/api/loved-ones/{loved_one_id}")
