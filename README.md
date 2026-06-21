@@ -112,6 +112,17 @@
 
 ## 💰 商业模式
 
+### 落地增长作战包
+
+- 商业落地、小红书、抖音、数字人宣传执行文档：`docs/go-to-market-xhs-douyin-digital-human-20260528.md`
+- 结构化社媒素材包：`creative/social-launch-kit-20260528.json`
+- 运营日历导出脚本：`python3 scripts/export_social_launch_assets.py`
+- 导出的发布日历：`docs/social-launch-calendar-20260528.md`
+- 可导入表格的发布看板：`docs/social-launch-posting-board-20260528.csv`
+- 自动化流水线用 JSONL：`creative/social-launch-posting-board-20260528.jsonl`
+- 数字人宣传台本：`docs/digital-human-promo-scripts-20260528.md`
+- 官网受控下载接口：`/api/growth/assets`、`/api/growth/assets/{asset_key}`
+
 ### 定价策略
 
 | 套餐 | 价格 | 功能 |

@@ -25,7 +25,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from urllib.parse import quote_plus
+from urllib.parse import parse_qs, quote_plus, urlsplit
 from zoneinfo import ZoneInfo
 import httpx
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
@@ -183,6 +183,13 @@ def paginated_response(items: list, total: int, offset: int, limit: int) -> dict
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_FILE = BASE_DIR / "frontend" / "index.html"
 ASSETS_DIR = BASE_DIR / "frontend" / "assets"
+GROWTH_ASSET_FILES = {
+    "calendar": BASE_DIR / "docs" / "social-launch-calendar-20260528.md",
+    "posting_csv": BASE_DIR / "docs" / "social-launch-posting-board-20260528.csv",
+    "posting_jsonl": BASE_DIR / "creative" / "social-launch-posting-board-20260528.jsonl",
+    "digital_human_scripts": BASE_DIR / "docs" / "digital-human-promo-scripts-20260528.md",
+}
+GROWTH_CAMPAIGN_ID = "eterna_launch_202606"
 
 
 def load_runtime_settings() -> Dict[str, str]:
@@ -536,6 +543,23 @@ class ProactiveSettingsPayload(BaseModel):
     timezone: str = DEFAULT_TIMEZONE
 
 
+class GrowthLeadPayload(BaseModel):
+    name: str = ""
+    contact: str
+    contact_type: str = "other"
+    source_platform: str = "website"
+    intent: str = "trial"
+    campaign: str = ""
+    note: str = ""
+    utm_source: str = ""
+    utm_medium: str = ""
+    utm_campaign: str = ""
+    utm_content: str = ""
+    referrer: str = ""
+    page_path: str = ""
+    consent_to_contact: bool = True
+
+
 class RegisterPayload(BaseModel):
     email: str
     password: str
@@ -688,6 +712,17 @@ def unique_preserve_order(values: List[str]) -> List[str]:
     return normalized
 
 
+def clean_marketing_text(value: Any, max_length: int = 200) -> str:
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", str(value or ""))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:max_length]
+
+
+def normalize_choice(value: Any, allowed: set[str], default: str) -> str:
+    cleaned = clean_marketing_text(value, 48).lower().replace("-", "_")
+    return cleaned if cleaned in allowed else default
+
+
 def public_media_url(path_str: str) -> Optional[str]:
     if not path_str:
         return None
@@ -804,6 +839,11 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def hash_marketing_ip(ip_address: str) -> str:
+    salt = runtime_config("GROWTH_LEAD_HASH_SALT", "eterna-growth-lead")
+    return hashlib.sha256(f"{salt}:{ip_address or 'unknown'}".encode("utf-8")).hexdigest()[:24]
+
+
 def extract_bearer_token(authorization: Optional[str]) -> Optional[str]:
     if not authorization:
         return None
@@ -827,6 +867,109 @@ def serialize_user(row: sqlite3.Row) -> dict:
         "display_name": row["display_name"],
         "is_admin": bool(row["is_admin"]) if "is_admin" in row.keys() else False,
         "created_at": row["created_at"],
+    }
+
+
+def serialize_growth_lead(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "name": row["name"],
+        "contact": row["contact"],
+        "contact_type": row["contact_type"],
+        "source_platform": row["source_platform"],
+        "intent": row["intent"],
+        "campaign": row["campaign"],
+        "note": row["note"],
+        "utm_source": row["utm_source"],
+        "utm_medium": row["utm_medium"],
+        "utm_campaign": row["utm_campaign"],
+        "utm_content": row["utm_content"] if "utm_content" in row.keys() else "",
+        "referrer": row["referrer"],
+        "page_path": row["page_path"],
+        "status": row["status"],
+        "consent_to_contact": bool(row["consent_to_contact"]),
+        "user_agent": row["user_agent"],
+        "metadata": json_object(row["metadata_json"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def extract_query_param(value: str, key: str) -> str:
+    if not value:
+        return ""
+    try:
+        parsed = urlsplit(value)
+        params = parse_qs(parsed.query)
+    except ValueError:
+        return ""
+    items = params.get(key) or []
+    return clean_marketing_text(items[0] if items else "", 120)
+
+
+def load_growth_posting_board() -> List[dict]:
+    path = GROWTH_ASSET_FILES["posting_jsonl"]
+    if not path.exists():
+        return []
+    rows: List[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        content_id = clean_marketing_text(item.get("content_id"), 80)
+        if not content_id:
+            continue
+        rows.append(
+            {
+                "content_id": content_id,
+                "platform": normalize_choice(
+                    item.get("platform"),
+                    {"xiaohongshu", "douyin", "digital_human", "website", "partner", "other"},
+                    "other",
+                ),
+                "publish_date": clean_marketing_text(item.get("publish_date"), 24),
+                "status": clean_marketing_text(item.get("status"), 40),
+                "owner": clean_marketing_text(item.get("owner"), 60),
+                "format": clean_marketing_text(item.get("format"), 120),
+                "title": clean_marketing_text(item.get("title"), 200),
+                "hook": clean_marketing_text(item.get("hook"), 260),
+                "cta": clean_marketing_text(item.get("cta"), 200),
+                "compliance_label": clean_marketing_text(item.get("compliance_label"), 200),
+                "primary_metric": clean_marketing_text(item.get("primary_metric"), 120),
+                "utm_url": clean_marketing_text(item.get("utm_url"), 500),
+            }
+        )
+    return sorted(rows, key=lambda row: (row["publish_date"], row["platform"], row["content_id"]))
+
+
+def build_growth_campaign_attribution(conn: sqlite3.Connection) -> dict:
+    by_content: defaultdict[str, int] = defaultdict(int)
+    by_platform: defaultdict[str, int] = defaultdict(int)
+    by_campaign: defaultdict[str, int] = defaultdict(int)
+    rows = conn.execute(
+        """
+        SELECT source_platform, utm_campaign, utm_content, page_path, referrer
+        FROM growth_leads
+        """
+    ).fetchall()
+    for row in rows:
+        platform = row["source_platform"] or "unknown"
+        campaign = row["utm_campaign"] or extract_query_param(row["page_path"], "utm_campaign") or extract_query_param(row["referrer"], "utm_campaign")
+        content = row["utm_content"] or extract_query_param(row["page_path"], "utm_content") or extract_query_param(row["referrer"], "utm_content")
+        by_platform[platform] += 1
+        if campaign:
+            by_campaign[campaign] += 1
+        if content:
+            by_content[content] += 1
+    return {
+        "by_content": dict(by_content),
+        "by_platform": dict(by_platform),
+        "by_campaign": dict(by_campaign),
+        "total": len(rows),
     }
 
 
@@ -1105,6 +1248,31 @@ def init_db():
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS growth_leads (
+                id TEXT PRIMARY KEY,
+                user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+                name TEXT NOT NULL DEFAULT '',
+                contact TEXT NOT NULL,
+                contact_type TEXT NOT NULL DEFAULT 'other',
+                source_platform TEXT NOT NULL DEFAULT 'website',
+                intent TEXT NOT NULL DEFAULT 'trial',
+                campaign TEXT NOT NULL DEFAULT '',
+                note TEXT NOT NULL DEFAULT '',
+                utm_source TEXT NOT NULL DEFAULT '',
+                utm_medium TEXT NOT NULL DEFAULT '',
+                utm_campaign TEXT NOT NULL DEFAULT '',
+                utm_content TEXT NOT NULL DEFAULT '',
+                referrer TEXT NOT NULL DEFAULT '',
+                page_path TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'new',
+                consent_to_contact INTEGER NOT NULL DEFAULT 1,
+                ip_hash TEXT,
+                user_agent TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS stripe_events (
                 id TEXT PRIMARY KEY,
                 event_type TEXT NOT NULL,
@@ -1120,6 +1288,9 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_voice_clone_models_loved_one_id ON voice_clone_models(loved_one_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_proactive_flows_next_run ON proactive_flows(enabled, next_run_at);
             CREATE INDEX IF NOT EXISTS idx_proactive_events_user_created ON proactive_events(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_growth_leads_created ON growth_leads(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_growth_leads_source ON growth_leads(source_platform, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_growth_leads_status ON growth_leads(status, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
             CREATE INDEX IF NOT EXISTS idx_loved_ones_user ON loved_ones(user_id, updated_at DESC);
             """
@@ -1134,6 +1305,7 @@ def init_db():
         add_column_if_missing(conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(conn, "proactive_flows", "preferred_message_mode", "TEXT NOT NULL DEFAULT 'voice'")
         add_column_if_missing(conn, "proactive_events", "video_asset_id", "TEXT")
+        add_column_if_missing(conn, "growth_leads", "utm_content", "TEXT NOT NULL DEFAULT ''")
 
         add_column_if_missing(conn, "loved_ones", "cover_title", "TEXT NOT NULL DEFAULT ''")
         add_column_if_missing(conn, "loved_ones", "cover_photo_asset_id", "TEXT")
@@ -5577,6 +5749,7 @@ async def health():
         "service": "念念",
         "version": "2.0.0",
         "mimo_configured": bool(MIMO_API_KEY),
+        "stripe_configured": bool(STRIPE_SECRET_KEY),
         "comfyui_configured": is_comfyui_enabled(),
         "ffmpeg_configured": bool(FFMPEG_BIN),
         "video_pipeline_ready": bool(MIMO_API_KEY and FFMPEG_BIN and is_comfyui_enabled()),
@@ -5708,28 +5881,31 @@ async def register(payload: RegisterPayload):
 
         timestamp = now_iso()
         user_id = str(uuid.uuid4())
-        conn.execute(
-            """
-            INSERT INTO users (
-                id, email, password_hash, display_name, phone_number, proactive_opt_in,
-                preferred_contact_channel, preferred_contact_time, timezone, created_at, updated_at
+        try:
+            conn.execute(
+                """
+                INSERT INTO users (
+                    id, email, password_hash, display_name, phone_number, proactive_opt_in,
+                    preferred_contact_channel, preferred_contact_time, timezone, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_id,
+                    email,
+                    hash_password(payload.password),
+                    display_name,
+                    "",
+                    0,
+                    "app",
+                    "20:30",
+                    DEFAULT_TIMEZONE,
+                    timestamp,
+                    timestamp,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                email,
-                hash_password(payload.password),
-                display_name,
-                "",
-                0,
-                "app",
-                "20:30",
-                DEFAULT_TIMEZONE,
-                timestamp,
-                timestamp,
-            ),
-        )
+        except sqlite3.IntegrityError:
+            raise HTTPException(status_code=409, detail="该邮箱已注册")
         sync_admin_flag(conn, user_id, email)
         create_trial_subscription(conn, user_id)
         import_legacy_json_data(conn, user_id)
@@ -5843,6 +6019,171 @@ async def get_client_bootstrap(current_user: dict = Depends(get_current_user)):
         }
 
 
+@app.post("/api/growth/leads")
+async def create_growth_lead(
+    payload: GrowthLeadPayload,
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+):
+    if not payload.consent_to_contact:
+        raise HTTPException(status_code=400, detail="请先同意用于本次试点沟通")
+
+    contact = clean_marketing_text(payload.contact, 120)
+    if len(contact) < 3:
+        raise HTTPException(status_code=400, detail="请填写微信、手机或邮箱，方便我们联系你")
+
+    name = clean_marketing_text(payload.name, 80)
+    note = clean_marketing_text(payload.note, 1000)
+    contact_type = normalize_choice(payload.contact_type, {"wechat", "phone", "email", "other"}, "other")
+    if contact_type == "other":
+        if "@" in contact:
+            contact_type = "email"
+        elif re.fullmatch(r"\+?[0-9][0-9\s-]{5,}", contact):
+            contact_type = "phone"
+
+    source_platform = normalize_choice(
+        payload.source_platform,
+        {"website", "xiaohongshu", "douyin", "digital_human", "wechat", "partner", "other"},
+        "website",
+    )
+    intent = normalize_choice(
+        payload.intent,
+        {"trial", "demo", "family", "custom", "partnership", "creator", "other"},
+        "trial",
+    )
+    campaign = clean_marketing_text(payload.campaign, 120)
+    utm_source = clean_marketing_text(payload.utm_source, 80)
+    utm_medium = clean_marketing_text(payload.utm_medium, 80)
+    utm_campaign = clean_marketing_text(payload.utm_campaign, 120)
+    utm_content = clean_marketing_text(payload.utm_content, 120)
+    referrer = clean_marketing_text(payload.referrer or request.headers.get("referer", ""), 500)
+    page_path = clean_marketing_text(payload.page_path, 240)
+    if not utm_content:
+        utm_content = extract_query_param(page_path, "utm_content") or extract_query_param(referrer, "utm_content")
+    user_agent = clean_marketing_text(request.headers.get("user-agent", ""), 500)
+    forwarded_for = request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+    client_ip = forwarded_for or (request.client.host if request.client else "")
+    current_user = get_optional_user_from_authorization(authorization)
+    timestamp = now_iso()
+    lead_id = str(uuid.uuid4())
+    metadata = {
+        "accept_language": clean_marketing_text(request.headers.get("accept-language", ""), 120),
+        "source": "growth_section",
+        "landing_url": str(request.url),
+    }
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO growth_leads (
+                id, user_id, name, contact, contact_type, source_platform, intent,
+                campaign, note, utm_source, utm_medium, utm_campaign, utm_content, referrer, page_path,
+                status, consent_to_contact, ip_hash, user_agent, metadata_json, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                lead_id,
+                current_user["id"] if current_user else None,
+                name,
+                contact,
+                contact_type,
+                source_platform,
+                intent,
+                campaign,
+                note,
+                utm_source,
+                utm_medium,
+                utm_campaign,
+                utm_content,
+                referrer,
+                page_path,
+                "new",
+                1,
+                hash_marketing_ip(client_ip),
+                user_agent,
+                json.dumps(metadata, ensure_ascii=False),
+                timestamp,
+                timestamp,
+            ),
+        )
+
+    return {
+        "id": lead_id,
+        "status": "received",
+        "source_platform": source_platform,
+        "intent": intent,
+        "next_step": "我们会按你留下的联系方式沟通 7 天数字家人搭建营或试点方案。",
+    }
+
+
+@app.get("/api/growth/assets")
+async def list_growth_assets():
+    assets = []
+    for key, path in GROWTH_ASSET_FILES.items():
+        if not path.exists():
+            continue
+        assets.append(
+            {
+                "key": key,
+                "filename": path.name,
+                "size_bytes": path.stat().st_size,
+                "download_url": f"/api/growth/assets/{key}",
+                "updated_at": datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat(),
+            }
+        )
+    return {
+        "campaign": "eterna_launch_202606",
+        "assets": assets,
+    }
+
+
+@app.get("/api/growth/assets/{asset_key}")
+async def download_growth_asset(asset_key: str):
+    path = GROWTH_ASSET_FILES.get(asset_key)
+    if path is None or not path.exists():
+        raise HTTPException(status_code=404, detail="增长运营资产不存在")
+    media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return FileResponse(
+        path,
+        media_type=media_type,
+        filename=path.name,
+    )
+
+
+@app.get("/api/growth/campaign-board")
+async def growth_campaign_board():
+    items = load_growth_posting_board()
+    with get_db() as conn:
+        attribution = build_growth_campaign_attribution(conn)
+    by_content = attribution["by_content"]
+    enriched_items = [
+        {
+            **item,
+            "lead_count": by_content.get(item["content_id"], 0),
+        }
+        for item in items
+    ]
+    upcoming = [item for item in enriched_items if item["status"] in {"draft_ready", "script_ready"}][:6]
+    return {
+        "campaign": {
+            "id": GROWTH_CAMPAIGN_ID,
+            "status": "draft_ready",
+            "asset_count": len(items),
+            "landing_url": PUBLIC_BASE_URL or "https://eterna-niannian.cloud",
+        },
+        "totals": {
+            "items": len(items),
+            "leads": attribution["total"],
+            "leads_by_platform": attribution["by_platform"],
+            "leads_by_campaign": attribution["by_campaign"],
+            "leads_by_content": by_content,
+        },
+        "next_items": upcoming,
+        "items": enriched_items,
+    }
+
+
 @app.get("/api/admin/overview")
 async def admin_overview(current_user: dict = Depends(get_current_user)):
     require_admin(current_user)
@@ -5852,6 +6193,7 @@ async def admin_overview(current_user: dict = Depends(get_current_user)):
         total_media = conn.execute("SELECT COUNT(*) FROM media_assets WHERE kind IN ('voice', 'photo', 'video', 'model3d')").fetchone()[0]
         total_messages = conn.execute("SELECT COUNT(*) FROM chat_messages").fetchone()[0]
         total_proactive = conn.execute("SELECT COUNT(*) FROM proactive_events").fetchone()[0]
+        total_growth_leads = conn.execute("SELECT COUNT(*) FROM growth_leads").fetchone()[0]
         media_breakdown = {
             row["kind"]: row["count"]
             for row in conn.execute(
@@ -5863,13 +6205,25 @@ async def admin_overview(current_user: dict = Depends(get_current_user)):
                 """
             ).fetchall()
         }
+        growth_leads_by_source = {
+            row["source_platform"]: row["count"]
+            for row in conn.execute(
+                """
+                SELECT source_platform, COUNT(*) AS count
+                FROM growth_leads
+                GROUP BY source_platform
+                """
+            ).fetchall()
+        }
     return {
         "total_users": total_users,
         "total_loved_ones": total_loved,
         "total_media_assets": total_media,
         "total_messages": total_messages,
         "total_proactive_events": total_proactive,
+        "total_growth_leads": total_growth_leads,
         "media_breakdown": media_breakdown,
+        "growth_leads_by_source": growth_leads_by_source,
     }
 
 
@@ -5935,6 +6289,23 @@ async def admin_list_loved_ones(limit: int = 50, current_user: dict = Depends(ge
         }
         for row in rows
     ]
+
+
+@app.get("/api/admin/growth-leads")
+async def admin_list_growth_leads(limit: int = 50, current_user: dict = Depends(get_current_user)):
+    require_admin(current_user)
+    limit = max(1, min(200, int(limit)))
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM growth_leads
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [serialize_growth_lead(row) for row in rows]
 
 
 @app.post("/api/auth/logout")

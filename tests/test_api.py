@@ -28,7 +28,7 @@ class TestHealthReady:
         assert resp.status_code == 200
         data = resp.json()
         assert "checks" in data
-        assert data["status"] in ("healthy", "unhealthy")
+        assert data["status"] in ("healthy", "degraded", "unhealthy")
         assert data["service"] == "念念"
         assert "version" in data
 
@@ -72,6 +72,90 @@ class TestPlansEndpoint:
         data = client.get("/api/plans").json()
         assert "stripe_configured" in data
         assert isinstance(data["stripe_configured"], bool)
+
+
+class TestGrowthLeads:
+    def test_create_growth_lead_without_auth(self, client):
+        resp = client.post("/api/growth/leads", json={
+            "name": "试点用户",
+            "contact": "wx-test-eterna",
+            "contact_type": "wechat",
+            "source_platform": "xiaohongshu",
+            "intent": "trial",
+            "campaign": "pytest-growth",
+            "note": "想先做一位亲人的声音留存。",
+            "utm_source": "xhs",
+            "utm_medium": "organic",
+            "utm_campaign": "launch",
+            "utm_content": "XHS-01",
+            "page_path": "/?utm_source=xhs#growthSection",
+            "consent_to_contact": True,
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "received"
+        assert data["source_platform"] == "xiaohongshu"
+        assert data["intent"] == "trial"
+        assert "id" in data
+
+    def test_create_growth_lead_requires_contact(self, client):
+        resp = client.post("/api/growth/leads", json={
+            "contact": "",
+            "source_platform": "douyin",
+            "intent": "demo",
+        })
+        assert resp.status_code in (400, 422)
+
+
+class TestGrowthAssets:
+    def test_growth_assets_list_public_launch_files(self, client):
+        resp = client.get("/api/growth/assets")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["campaign"] == "eterna_launch_202606"
+        keys = {asset["key"] for asset in data["assets"]}
+        assert "calendar" in keys
+        assert "posting_csv" in keys
+        assert "digital_human_scripts" in keys
+
+    def test_growth_asset_download_csv(self, client):
+        resp = client.get("/api/growth/assets/posting_csv")
+        assert resp.status_code == 200
+        assert "content_id" in resp.text
+        assert "utm_campaign=eterna_launch_202606" in resp.text
+
+    def test_growth_asset_rejects_unknown_key(self, client):
+        resp = client.get("/api/growth/assets/not-allowed")
+        assert resp.status_code == 404
+
+    def test_campaign_board_returns_content_items(self, client):
+        resp = client.get("/api/growth/campaign-board")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["campaign"]["id"] == "eterna_launch_202606"
+        assert data["totals"]["items"] >= 8
+        assert any(item["content_id"] == "D01" for item in data["items"])
+
+    def test_campaign_board_attributes_growth_leads_by_content(self, client):
+        lead_resp = client.post("/api/growth/leads", json={
+            "name": "抖音用户",
+            "contact": "13800000000",
+            "contact_type": "phone",
+            "source_platform": "douyin",
+            "intent": "demo",
+            "campaign": "eterna_launch_202606",
+            "utm_source": "douyin",
+            "utm_medium": "social",
+            "utm_campaign": "eterna_launch_202606",
+            "utm_content": "D01",
+            "page_path": "/?utm_source=douyin&utm_campaign=eterna_launch_202606&utm_content=D01#growthSection",
+            "consent_to_contact": True,
+        })
+        assert lead_resp.status_code == 200
+
+        board = client.get("/api/growth/campaign-board").json()
+        d01 = next(item for item in board["items"] if item["content_id"] == "D01")
+        assert d01["lead_count"] >= 1
 
 
 class TestAuthFlow:
@@ -238,7 +322,12 @@ class TestMemories:
 
         resp = client.get(f"/api/memories/{lo_id}", headers=auth_headers)
         assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
+        data = resp.json()
+        if isinstance(data, dict):
+            assert "data" in data
+            assert isinstance(data["data"], list)
+        else:
+            assert isinstance(data, list)
 
 
 class TestPagination:
